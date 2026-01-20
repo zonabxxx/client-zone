@@ -1334,22 +1334,29 @@ export async function getCalculationByShareToken(
     let organization: PublicQuoteData['organization'] = null;
     if (organizationId) {
       const orgResult = await db.execute({
-        sql: `SELECT name, email, phone, address, ico, dic, ic_dph as icDph, vat_rate as vatRate
-              FROM organization WHERE id = ? LIMIT 1`,
+        sql: `SELECT name, metadata FROM organization WHERE id = ? LIMIT 1`,
         args: [organizationId]
       });
       
       if (orgResult.rows.length > 0) {
         const orgRow = orgResult.rows[0];
+        // Parse metadata for additional org info
+        let metadata: any = {};
+        if (orgRow.metadata) {
+          try {
+            metadata = typeof orgRow.metadata === 'string' ? JSON.parse(orgRow.metadata) : orgRow.metadata;
+          } catch { /* ignore */ }
+        }
+        
         organization = {
           name: orgRow.name as string,
-          email: orgRow.email as string | null,
-          phone: orgRow.phone as string | null,
-          address: orgRow.address as string | null,
-          ico: orgRow.ico as string | null,
-          dic: orgRow.dic as string | null,
-          icDph: orgRow.icDph as string | null,
-          vatRate: orgRow.vatRate as number | null,
+          email: metadata.email || null,
+          phone: metadata.phone || null,
+          address: metadata.address || null,
+          ico: metadata.ico || null,
+          dic: metadata.dic || null,
+          icDph: metadata.icDph || metadata.ic_dph || null,
+          vatRate: metadata.vatRate || metadata.vat_rate || 23,
         };
       }
     }
@@ -1560,20 +1567,27 @@ export async function getQuoteBundleByToken(
     let organization: QuoteBundleData['organization'] = null;
     if (organizationId) {
       const orgResult = await db.execute({
-        sql: `SELECT name, email, phone, address, ico, vat_rate as vatRate
-              FROM organization WHERE id = ? LIMIT 1`,
+        sql: `SELECT name, metadata FROM organization WHERE id = ? LIMIT 1`,
         args: [organizationId]
       });
       
       if (orgResult.rows.length > 0) {
         const orgRow = orgResult.rows[0];
+        // Parse metadata for additional org info
+        let metadata: any = {};
+        if (orgRow.metadata) {
+          try {
+            metadata = typeof orgRow.metadata === 'string' ? JSON.parse(orgRow.metadata) : orgRow.metadata;
+          } catch { /* ignore */ }
+        }
+        
         organization = {
           name: orgRow.name as string,
-          email: orgRow.email as string | null,
-          phone: orgRow.phone as string | null,
-          address: orgRow.address as string | null,
-          ico: orgRow.ico as string | null,
-          vatRate: orgRow.vatRate as number | null,
+          email: metadata.email || null,
+          phone: metadata.phone || null,
+          address: metadata.address || null,
+          ico: metadata.ico || null,
+          vatRate: metadata.vatRate || metadata.vat_rate || 23,
         };
       }
     }
