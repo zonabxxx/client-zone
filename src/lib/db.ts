@@ -1474,12 +1474,30 @@ export async function updateQuoteResponse(
     if (entityResult.rows.length > 0) {
       const entityId = entityResult.rows[0].entityId as string;
       
-      // Update or insert approvalStatus attribute
-      await db.execute({
-        sql: `INSERT OR REPLACE INTO attributes (entity_id, attribute_name, string_value, updated_at)
-              VALUES (?, 'approvalStatus', ?, ?)`,
-        args: [entityId, newApprovalStatus, Math.floor(Date.now() / 1000)]
+      // Check if approvalStatus attribute exists
+      const existingAttr = await db.execute({
+        sql: `SELECT id FROM attributes 
+              WHERE entity_id = ? AND attribute_name = 'approvalStatus'
+              LIMIT 1`,
+        args: [entityId]
       });
+      
+      if (existingAttr.rows.length > 0) {
+        // Update existing attribute
+        await db.execute({
+          sql: `UPDATE attributes SET string_value = ? 
+                WHERE entity_id = ? AND attribute_name = 'approvalStatus'`,
+          args: [newApprovalStatus, entityId]
+        });
+      } else {
+        // Insert new attribute with all required fields
+        const attrId = crypto.randomUUID();
+        await db.execute({
+          sql: `INSERT INTO attributes (id, entity_id, attribute_name, value_type, string_value, created_at)
+                VALUES (?, ?, 'approvalStatus', 'string', ?, ?)`,
+          args: [attrId, entityId, newApprovalStatus, Math.floor(Date.now() / 1000)]
+        });
+      }
     }
     
     return true;
