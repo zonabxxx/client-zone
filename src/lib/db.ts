@@ -1335,7 +1335,7 @@ export async function getCalculationByShareToken(
     if (organizationId) {
       const orgResult = await db.execute({
         sql: `SELECT name, email, phone, address, ico, dic, ic_dph as icDph, vat_rate as vatRate
-              FROM organizations WHERE id = ? LIMIT 1`,
+              FROM organization WHERE id = ? LIMIT 1`,
         args: [organizationId]
       });
       
@@ -1561,7 +1561,7 @@ export async function getQuoteBundleByToken(
     if (organizationId) {
       const orgResult = await db.execute({
         sql: `SELECT name, email, phone, address, ico, vat_rate as vatRate
-              FROM organizations WHERE id = ? LIMIT 1`,
+              FROM organization WHERE id = ? LIMIT 1`,
         args: [organizationId]
       });
       
