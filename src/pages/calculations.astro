@@ -1,0 +1,401 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getSessionFromCookie } from '../lib/session';
+import { getClientCalculations, getProjectCalculations } from '../lib/db';
+import DashboardHeader from '../components/DashboardHeader.astro';
+import Navigation from '../components/Navigation.astro';
+import { format } from 'date-fns';
+import { sk } from 'date-fns/locale';
+
+const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
+
+if (!session) {
+  return Astro.redirect('/');
+}
+
+// Filter by project if specified
+const projectFilter = Astro.url.searchParams.get('project');
+
+// Initial load - only first 20 items (optimized with batch loading)
+const result = projectFilter
+  ? await getProjectCalculations(projectFilter, { limit: 20, offset: 0 })
+  : await getClientCalculations(session.customerId, session.customerName, { limit: 20, offset: 0 });
+
+const calculations = result.items;
+const hasMore = result.hasMore;
+const totalCount = result.total;
+
+// Stats
+const stats = {
+  total: totalCount,
+  draft: calculations.filter(c => c.approvalStatus === 'DRAFT').length,
+  pending: calculations.filter(c => c.approvalStatus === 'CLIENT_VIEWED').length,
+  approved: calculations.filter(c => c.approvalStatus === 'CLIENT_APPROVED').length,
+};
+
+// Approval status labels and colors
+const statusConfig: Record<string, { label: string; color: string; bgColor: string }> = {
+  'DRAFT': { label: 'Koncept', color: 'text-slate-400', bgColor: 'bg-slate-500/20' },
+  'CLIENT_VIEWED': { label: 'Čaká na schválenie', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
+  'CLIENT_APPROVED': { label: 'Schválené', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
+  'CLIENT_REJECTED': { label: 'Zamietnuté', color: 'text-red-400', bgColor: 'bg-red-500/20' },
+  'CLIENT_REQUESTED_CHANGES': { label: 'Požadované zmeny', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+};
+
+function formatDate(date: Date | null): string {
+  if (!date) return '—';
+  try {
+    return format(date, 'd. MMM yyyy', { locale: sk });
+  } catch {
+    return '—';
+  }
+}
+---
+
+<Layout title="Všetky cenové ponuky">
+  <main class="min-h-screen">
+    <DashboardHeader customerName={session.customerName} />
+    
+    <div class="max-w-6xl mx-auto px-4 py-8">
+      <Navigation active="calculations" />
+      
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="glass rounded-2xl p-6 animate-fade-in-up">
+          <div class="text-3xl font-bold text-white mb-1">{stats.total}</div>
+          <div class="text-slate-400 text-sm">Celkom ponúk</div>
+        </div>
+        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-1 border border-emerald-500/30 bg-emerald-500/5">
+          <div class="text-3xl font-bold text-emerald-400 mb-1">{stats.approved}</div>
+          <div class="text-slate-400 text-sm">Schválených</div>
+        </div>
+        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-2">
+          <div class="text-3xl font-bold text-amber-400 mb-1">{stats.pending}</div>
+          <div class="text-slate-400 text-sm">Čaká na vás</div>
+        </div>
+        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-3">
+          <div class="text-3xl font-bold text-slate-400 mb-1">{stats.draft}</div>
+          <div class="text-slate-400 text-sm">V príprave</div>
+        </div>
+      </div>
+
+      <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
+        <button data-filter="all" class="filter-btn active px-4 py-2 rounded-xl text-sm font-medium transition-all">
+          Všetky
+        </button>
+        <button data-filter="pending" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all">
+          Na schválenie
+        </button>
+        <button data-filter="approved" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all">
+          Schválené
+        </button>
+        <button data-filter="draft" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all">
+          Koncepty
+        </button>
+      </div>
+
+      {calculations.length === 0 ? (
+        <div class="glass rounded-3xl p-12 text-center animate-fade-in-up">
+          <div class="text-6xl mb-4">📋</div>
+          <h2 class="text-xl font-semibold text-white mb-2">Zatiaľ žiadne cenové ponuky</h2>
+          <p class="text-slate-400">Vaše cenové ponuky sa tu zobrazia hneď ako budú vytvorené.</p>
+        </div>
+      ) : (
+        <div class="space-y-4" id="calculationsContainer">
+          {calculations.map((calc, index) => {
+            const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
+            const hasShareLink = calc.shareToken && calc.shareExpiresAt && calc.shareExpiresAt > new Date();
+            const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
+            
+            return (
+              <div 
+                class:list={[
+                  "calculation-card rounded-2xl p-6 transition-all animate-fade-in-up",
+                  isApproved 
+                    ? "bg-emerald-500/20 border-2 border-emerald-500/50 hover:bg-emerald-500/25" 
+                    : "glass hover:bg-white/5"
+                ]}
+                style={`animation-delay: ${index * 50}ms`}
+                data-status={calc.approvalStatus}
+              >
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                      <span class="text-2xl">{isApproved ? '✅' : '📋'}</span>
+                      <div>
+                        <div class="flex items-center gap-2 mb-1">
+                          <span class="font-mono text-xs text-blue-400">{calc.calculationNumber}</span>
+                          {isApproved ? (
+                            <span class="px-2 py-0.5 bg-emerald-500 text-white text-xs font-bold rounded-full">
+                              SCHVÁLENÉ
+                            </span>
+                          ) : (
+                            <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color} ${status.bgColor}`}>
+                              {status.label}
+                            </span>
+                          )}
+                        </div>
+                        <h3 class:list={[
+                          "text-lg font-semibold",
+                          isApproved ? "text-emerald-100" : "text-white"
+                        ]}>{calc.name}</h3>
+                      </div>
+                    </div>
+                    {calc.description && !isApproved && (
+                      <p class="text-sm text-slate-400 mb-2 line-clamp-2">{calc.description}</p>
+                    )}
+                    <div class="flex flex-wrap gap-4 text-sm text-slate-400">
+                      <span class="flex items-center gap-1">
+                        <span>📅</span>
+                        {formatDate(calc.updatedAt)}
+                      </span>
+                      {hasShareLink && !isApproved && (
+                        <span class="flex items-center gap-1 text-emerald-400">
+                          <span>🔗</span>
+                          Ponuka aktívna
+                        </span>
+                      )}
+                    </div>
+                    {isApproved && (
+                      <div class="mt-3 flex items-center gap-2 text-sm text-emerald-300">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                        <span>Táto cenová ponuka bola schválená. Zákazka je v realizácii.</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div class="flex items-center gap-4">
+                    {calc.totalPrice && calc.totalPrice > 0 && (
+                      <div class="text-right">
+                        <div class:list={[
+                          "text-xl font-bold",
+                          isApproved ? "text-emerald-300" : "text-emerald-400"
+                        ]}>
+                          {calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+                        </div>
+                        <div class="text-xs text-slate-400">Celková cena</div>
+                      </div>
+                    )}
+                    
+                    <div class="flex flex-col gap-2">
+                      {hasShareLink && (
+                        <a 
+                          href={`https://app.adsun.sk/public/quote/${calc.id}/${calc.shareToken}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class:list={[
+                            "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all shadow-lg",
+                            isApproved 
+                              ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
+                              : "bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white shadow-primary-600/20"
+                          ]}
+                        >
+                          <span>{isApproved ? 'Detail ponuky' : 'Zobraziť ponuku'}</span>
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                      {calc.approvalStatus === 'CLIENT_VIEWED' && hasShareLink && (
+                        <span class="text-xs text-center text-amber-400 font-medium">
+                          ⏳ Čaká na vaše schválenie
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          
+          {/* Load more button */}
+          {hasMore && (
+            <div class="text-center mt-6">
+              <button 
+                id="loadMoreBtn"
+                data-offset="20"
+                data-project={projectFilter || ''}
+                class="px-6 py-3 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-xl transition-colors"
+              >
+                Načítať viac ({totalCount - 20} zostáva)
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .filter-btn {
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    border: 1px solid transparent;
+  }
+  
+  .filter-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+  }
+  
+  .filter-btn.active {
+    background: #0552b5;
+    color: white;
+    border-color: #0967d2;
+  }
+  
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .loading-spinner {
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+</style>
+
+<script>
+  // Filter functionality
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  
+  function updateFilters() {
+    const calcCards = document.querySelectorAll('.calculation-card');
+    const activeBtn = document.querySelector('.filter-btn.active');
+    const filter = activeBtn?.getAttribute('data-filter') || 'all';
+    
+    calcCards.forEach(card => {
+      const status = card.getAttribute('data-status');
+      let show = true;
+      if (filter === 'pending') show = status === 'CLIENT_VIEWED';
+      if (filter === 'approved') show = status === 'CLIENT_APPROVED';
+      if (filter === 'draft') show = status === 'DRAFT';
+      (card as HTMLElement).style.display = show ? 'block' : 'none';
+    });
+  }
+  
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateFilters();
+    });
+  });
+  
+  // Load more functionality
+  const loadMoreBtn = document.getElementById('loadMoreBtn') as HTMLButtonElement | null;
+  const container = document.getElementById('calculationsContainer');
+  
+  if (loadMoreBtn && container) {
+    loadMoreBtn.addEventListener('click', async () => {
+      const offset = parseInt(loadMoreBtn.dataset.offset || '20');
+      const projectId = loadMoreBtn.dataset.project;
+      
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.innerHTML = '<span class="loading-spinner inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full"></span> Načítavam...';
+      
+      try {
+        const url = projectId 
+          ? `/api/calculations?offset=${offset}&limit=20&projectId=${projectId}`
+          : `/api/calculations?offset=${offset}&limit=20`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.items && data.items.length > 0) {
+          // Render new items
+          for (const calc of data.items) {
+            const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
+            const hasShareLink = calc.shareToken && calc.shareExpiresAt && new Date(calc.shareExpiresAt) > new Date();
+            
+            const card = document.createElement('div');
+            card.className = isApproved 
+              ? 'calculation-card rounded-2xl p-6 transition-all animate-fade-in-up bg-emerald-500/20 border-2 border-emerald-500/50 hover:bg-emerald-500/25'
+              : 'calculation-card rounded-2xl p-6 transition-all animate-fade-in-up glass hover:bg-white/5';
+            card.dataset.status = calc.approvalStatus;
+            
+            card.innerHTML = `
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex-1">
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="text-2xl">${isApproved ? '✅' : '📋'}</span>
+                    <div>
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="font-mono text-xs text-blue-400">${calc.calculationNumber}</span>
+                        ${isApproved 
+                          ? '<span class="px-2 py-0.5 bg-emerald-500 text-white text-xs font-bold rounded-full">SCHVÁLENÉ</span>'
+                          : `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${calc.approvalStatus === 'CLIENT_VIEWED' ? 'text-amber-400 bg-amber-500/20' : 'text-slate-400 bg-slate-500/20'}">${calc.approvalStatus === 'CLIENT_VIEWED' ? 'Čaká na schválenie' : 'Koncept'}</span>`
+                        }
+                      </div>
+                      <h3 class="text-lg font-semibold ${isApproved ? 'text-emerald-100' : 'text-white'}">${calc.name}</h3>
+                    </div>
+                  </div>
+                  ${isApproved ? `
+                    <div class="mt-3 flex items-center gap-2 text-sm text-emerald-300">
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                      </svg>
+                      <span>Táto cenová ponuka bola schválená. Zákazka je v realizácii.</span>
+                    </div>
+                  ` : ''}
+                </div>
+                <div class="flex items-center gap-4">
+                  ${calc.totalPrice ? `
+                    <div class="text-right">
+                      <div class="text-xl font-bold ${isApproved ? 'text-emerald-300' : 'text-emerald-400'}">
+                        ${calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+                      </div>
+                      <div class="text-xs text-slate-400">Celková cena</div>
+                    </div>
+                  ` : ''}
+                  ${hasShareLink ? `
+                    <a 
+                      href="https://app.adsun.sk/public/quote/${calc.id}/${calc.shareToken}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all shadow-lg ${isApproved ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20' : 'bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white shadow-primary-600/20'}"
+                    >
+                      <span>${isApproved ? 'Detail ponuky' : 'Zobraziť ponuku'}</span>
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  ` : ''}
+                </div>
+              </div>
+            `;
+            
+            // Insert before load more button container
+            loadMoreBtn.parentElement?.parentElement?.insertBefore(card, loadMoreBtn.parentElement);
+          }
+          
+          // Update button
+          const newOffset = offset + data.items.length;
+          if (data.hasMore) {
+            const remaining = data.total - newOffset;
+            loadMoreBtn.dataset.offset = newOffset.toString();
+            loadMoreBtn.innerHTML = `Načítať viac (${remaining} zostáva)`;
+            loadMoreBtn.disabled = false;
+          } else {
+            loadMoreBtn.parentElement?.remove();
+          }
+          
+          // Reapply filters
+          updateFilters();
+        }
+      } catch (error) {
+        console.error('Error loading more:', error);
+        loadMoreBtn.innerHTML = 'Chyba, skúste znova';
+        loadMoreBtn.disabled = false;
+      }
+    });
+  }
+</script>

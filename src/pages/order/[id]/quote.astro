@@ -1,0 +1,301 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import DashboardHeader from '../../../components/DashboardHeader.astro';
+import { getSessionFromCookie } from '../../../lib/session';
+import { getOrderById, getQuoteProducts, canCustomerAccessOrder, getCalculationShareLink } from '../../../lib/db';
+import { format } from 'date-fns';
+import { sk } from 'date-fns/locale';
+
+// Check authentication
+const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
+
+if (!session) {
+  return Astro.redirect('/');
+}
+
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect('/dashboard');
+}
+
+// Verify access
+const hasAccess = await canCustomerAccessOrder(session.customerId, session.customerName, id);
+if (!hasAccess) {
+  return Astro.redirect('/dashboard');
+}
+
+// Fetch order data
+const order = await getOrderById(id);
+
+if (!order) {
+  return Astro.redirect('/dashboard');
+}
+
+// Get products (grouped services by product ID)
+const products = await getQuoteProducts(id, order.name);
+
+// Get calculation share link if exists
+const shareLink = await getCalculationShareLink(order.calculationId);
+
+// Determine quote status based on order status
+// If order exists and is confirmed/in progress/completed - it means quote was approved
+const orderStatusToQuoteStatus: Record<string, string> = {
+  'DRAFT': 'DRAFT',
+  'CONCEPT': 'DRAFT', 
+  'PENDING': 'CLIENT_VIEWED',
+  'CONFIRMED': 'CLIENT_APPROVED',
+  'IN_PROGRESS': 'CLIENT_APPROVED',
+  'COMPLETED': 'CLIENT_APPROVED',
+  'CANCELLED': 'CLIENT_REJECTED',
+};
+const approvalStatus = orderStatusToQuoteStatus[order.status] || 'CLIENT_APPROVED';
+
+// Approval status config
+const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
+  'DRAFT': { label: 'V príprave', color: 'text-slate-400', bgColor: 'bg-slate-500/20', icon: '📝' },
+  'CLIENT_VIEWED': { label: 'Čaká na schválenie', color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: '⏳' },
+  'CLIENT_APPROVED': { label: 'Schválené', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20', icon: '✅' },
+  'CLIENT_REJECTED': { label: 'Zamietnuté', color: 'text-red-400', bgColor: 'bg-red-500/20', icon: '❌' },
+  'CLIENT_REQUESTED_CHANGES': { label: 'Požadované zmeny', color: 'text-orange-400', bgColor: 'bg-orange-500/20', icon: '✏️' },
+};
+const currentStatus = statusConfig[approvalStatus] || statusConfig['DRAFT'];
+const isApproved = approvalStatus === 'CLIENT_APPROVED';
+
+// Determine back URL based on where user came from
+const fromParam = Astro.url.searchParams.get('from');
+const backUrl = fromParam === 'quotes' ? '/quotes' : `/order/${id}`;
+const backLabel = fromParam === 'quotes' ? 'Späť na cenové ponuky' : 'Späť na zákazku';
+
+// Calculate totals
+const subtotal = Math.round(products.reduce((sum, p) => sum + (p.totalPrice || 0), 0) * 100) / 100;
+const vatRate = 20; // 20% DPH
+const vatAmount = Math.round(subtotal * (vatRate / 100) * 100) / 100;
+const totalWithVat = Math.round((subtotal + vatAmount) * 100) / 100;
+
+function formatDate(date: Date | number | null): string {
+  if (!date) return '—';
+  try {
+    const d = typeof date === 'number' ? new Date(date) : new Date(date);
+    return format(d, 'd. MMMM yyyy', { locale: sk });
+  } catch {
+    return '—';
+  }
+}
+---
+
+<Layout title={`Cenová ponuka - ${order.name}`}>
+  <main class="min-h-screen">
+    <DashboardHeader customerName={session.customerName} />
+    
+    <div class="max-w-3xl mx-auto px-4 py-8">
+      <!-- Back button -->
+      <a href={backUrl} class="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-6">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        {backLabel}
+      </a>
+
+      <!-- Quote header -->
+      <div class:list={[
+        "rounded-3xl p-8 mb-6 animate-fade-in-up",
+        isApproved ? "bg-emerald-500/10 border-2 border-emerald-500/30" : "glass"
+      ]}>
+        <div class="text-center mb-8">
+          <div class="flex flex-wrap items-center justify-center gap-2 mb-4">
+            <div class="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/20 rounded-full text-blue-400 text-sm font-medium">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Cenová ponuka
+            </div>
+            <div class={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${currentStatus.bgColor} ${currentStatus.color}`}>
+              <span>{currentStatus.icon}</span>
+              {currentStatus.label}
+            </div>
+          </div>
+          <h1 class="text-2xl md:text-3xl font-bold text-white mb-2">{order.name}</h1>
+          <p class="text-slate-400">Číslo: {order.orderNumber}</p>
+          
+          {isApproved && (
+            <div class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/20 rounded-full text-emerald-400 text-sm">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+              Táto ponuka bola schválená. Zákazka je v realizácii.
+            </div>
+          )}
+        </div>
+
+        <!-- Quote info -->
+        <div class="grid grid-cols-2 gap-4 text-sm mb-8 pb-8 border-b border-slate-700/50">
+          <div>
+            <div class="text-slate-400 mb-1">Dátum vytvorenia</div>
+            <div class="text-white font-medium">{formatDate(order.createdAt)}</div>
+          </div>
+          <div>
+            <div class="text-slate-400 mb-1">Platnosť do</div>
+            <div class="text-white font-medium">{formatDate(order.plannedEndDate)}</div>
+          </div>
+        </div>
+
+        <!-- Products section -->
+        {products.length > 0 && (
+          <div class="mb-8">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
+                  <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clip-rule="evenodd" />
+                </svg>
+              </span>
+              <span class="text-sm font-semibold text-white uppercase tracking-wider">Produkty</span>
+            </div>
+            
+            <div class="space-y-3">
+              {products.map((product) => (
+                <div class="glass-light rounded-xl p-4">
+                  <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                      <div class="text-white font-semibold text-lg">{product.name}</div>
+                      <div class="text-sm text-slate-400 mt-1">
+                        × {product.quantity.toLocaleString('sk-SK', { maximumFractionDigits: 2 })} {product.unit}
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-xl font-bold text-emerald-400">
+                        {product.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Product dimensions / sticker details */}
+                  {product.dimensions && product.dimensions.length > 0 && (
+                    <div class="mt-4 pt-4 border-t border-slate-700/50">
+                      <div class="text-xs text-slate-500 uppercase tracking-wider mb-2">Rozmery</div>
+                      <div class="grid gap-2">
+                        {product.dimensions.map((dim, idx) => (
+                          <div class="flex items-center justify-between bg-slate-800/50 rounded-lg px-3 py-2 text-sm">
+                            <div class="flex items-center gap-3">
+                              <span class="w-6 h-6 bg-blue-500/20 text-blue-400 rounded flex items-center justify-center text-xs font-bold">
+                                {idx + 1}
+                              </span>
+                              <span class="text-white">{dim.name || `Položka ${idx + 1}`}</span>
+                            </div>
+                            <div class="flex items-center gap-4 text-slate-300">
+                              <span class="flex items-center gap-1">
+                                <span class="text-slate-500">š:</span>
+                                <span class="font-medium">{dim.width} mm</span>
+                              </span>
+                              <span class="flex items-center gap-1">
+                                <span class="text-slate-500">v:</span>
+                                <span class="font-medium">{dim.height} mm</span>
+                              </span>
+                              <span class="flex items-center gap-1">
+                                <span class="text-slate-500">ks:</span>
+                                <span class="font-medium">{dim.pieces}</span>
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <!-- Totals -->
+        <div class="space-y-3 pt-6 border-t border-slate-700/50">
+          <div class="flex justify-between text-slate-400">
+            <span>Medzisúčet bez DPH</span>
+            <span class="text-white">{subtotal.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>DPH {vatRate}%</span>
+            <span class="text-white">{vatAmount.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</span>
+          </div>
+          <div class="flex justify-between text-xl font-bold text-white pt-3 border-t border-slate-700/30">
+            <span>Celkom s DPH</span>
+            <span class="text-emerald-400">{totalWithVat.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</span>
+          </div>
+        </div>
+
+        <!-- Final price highlight -->
+        <div class="mt-8 p-6 bg-gradient-to-br from-emerald-500/10 to-blue-500/10 rounded-2xl border border-emerald-500/20 text-center">
+          <div class="text-sm text-slate-400 mb-2">Vaša cena</div>
+          <div class="text-4xl md:text-5xl font-bold text-white mb-1">
+            {totalWithVat.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+          </div>
+          <div class="text-sm text-slate-400">vrátane DPH {vatRate}%</div>
+          
+          {order.plannedEndDate && (
+            <div class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-amber-500/20 rounded-full text-amber-400 text-sm">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Ponuka platí do {formatDate(order.plannedEndDate)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        {shareLink && (
+          <a 
+            href={`https://app.adsun.sk${shareLink}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-semibold rounded-xl transition-all shadow-lg shadow-emerald-600/20"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Zobraziť detailnú ponuku
+          </a>
+        )}
+        <button 
+          onclick="window.print()"
+          class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl transition-colors"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          Vytlačiť ponuku
+        </button>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  @media print {
+    body {
+      background: white !important;
+      color: black !important;
+    }
+    .glass, .glass-light {
+      background: white !important;
+      border: 1px solid #ddd !important;
+    }
+    button, a[href="/dashboard"], a[href*="/order/"] {
+      display: none !important;
+    }
+    header, footer {
+      display: none !important;
+    }
+    .text-white {
+      color: #1a1a1a !important;
+    }
+    .text-emerald-400 {
+      color: #047857 !important;
+    }
+    .text-slate-400 {
+      color: #666 !important;
+    }
+  }
+</style>

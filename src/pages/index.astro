@@ -1,16 +1,125 @@
 ---
+import Layout from '../layouts/Layout.astro';
+import { getSessionFromCookie } from '../lib/session';
 
+// Check if user is already logged in
+const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
+
+if (session) {
+  return Astro.redirect('/dashboard');
+}
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Layout title="Prihlásenie">
+  <main class="min-h-screen flex items-center justify-center px-4 py-12">
+    <div class="w-full max-w-md">
+      <!-- Logo / Brand -->
+      <div class="text-center mb-8 animate-fade-in-up">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary-600/20 border border-primary-500/30 mb-6 glow-primary">
+          <svg class="w-10 h-10 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <h1 class="text-3xl font-bold text-white mb-2">Klientský Portál</h1>
+        <p class="text-slate-400">Sledujte stav vašich zákaziek</p>
+      </div>
+
+      <!-- Login Card -->
+      <div class="glass rounded-3xl p-8 animate-fade-in-up stagger-1">
+        <form id="loginForm" class="space-y-6">
+          <div>
+            <label for="email" class="block text-sm font-medium text-slate-300 mb-2">
+              Váš email
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              required
+              placeholder="meno@firma.sk"
+              autocomplete="email"
+              class="w-full"
+            />
+          </div>
+
+          <div id="errorMessage" class="hidden p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+          </div>
+
+          <button
+            type="submit"
+            class="btn-primary w-full flex items-center justify-center gap-2"
+          >
+            <span>Prihlásiť sa</span>
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </button>
+        </form>
+
+        <div class="mt-6 pt-6 border-t border-slate-700/50">
+          <p class="text-center text-slate-400 text-sm">
+            Použite email, ktorý máte registrovaný u nás ako klient.
+          </p>
+        </div>
+      </div>
+
+      <!-- Info cards -->
+      <div class="mt-8 grid grid-cols-2 gap-4 animate-fade-in-up stagger-2">
+        <div class="glass-light rounded-2xl p-4 text-center">
+          <div class="text-2xl mb-2">📊</div>
+          <p class="text-sm text-slate-300">Prehľad zákaziek</p>
+        </div>
+        <div class="glass-light rounded-2xl p-4 text-center">
+          <div class="text-2xl mb-2">⏱️</div>
+          <p class="text-sm text-slate-300">Stavy v reálnom čase</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  const form = document.getElementById('loginForm') as HTMLFormElement;
+  const errorDiv = document.getElementById('errorMessage') as HTMLDivElement;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(form);
+    const email = formData.get('email') as string;
+    
+    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    const originalContent = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `
+      <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>Overujem...</span>
+    `;
+    
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        window.location.href = '/dashboard';
+      } else {
+        errorDiv.textContent = data.error || 'Prihlásenie zlyhalo';
+        errorDiv.classList.remove('hidden');
+      }
+    } catch (error) {
+      errorDiv.textContent = 'Nastala chyba pri pripojení';
+      errorDiv.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalContent;
+    }
+  });
+</script>

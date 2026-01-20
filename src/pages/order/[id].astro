@@ -1,0 +1,346 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import DashboardHeader from '../../components/DashboardHeader.astro';
+import { getSessionFromCookie } from '../../lib/session';
+import { getOrderById, getOrderServices, getOrderTasks, canCustomerAccessOrder } from '../../lib/db';
+import { format } from 'date-fns';
+import { sk } from 'date-fns/locale';
+
+// Check authentication
+const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
+
+if (!session) {
+  return Astro.redirect('/');
+}
+
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect('/dashboard');
+}
+
+// Verify access (now async)
+const hasAccess = await canCustomerAccessOrder(session.customerId, session.customerName, id);
+if (!hasAccess) {
+  return Astro.redirect('/dashboard');
+}
+
+// Fetch order data (now async)
+const order = await getOrderById(id);
+
+if (!order) {
+  return Astro.redirect('/dashboard');
+}
+
+const services = await getOrderServices(id);
+const tasks = await getOrderTasks(id);
+
+// Calculate progress from tasks (most accurate)
+const totalTasks = tasks.length || 1;
+const completedTasks = tasks.filter(t => t.status === 'completed').length;
+const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+// Completed = 100%, In Progress = 50% weight
+const progressPercent = Math.round(((completedTasks * 100) + (inProgressTasks * 50)) / totalTasks);
+
+// Status configuration
+const statusLabels: Record<string, string> = {
+  DRAFT: 'Koncept',
+  CONFIRMED: 'Potvrdené',
+  IN_PROGRESS: 'Prebieha',
+  COMPLETED: 'Dokončené',
+  CANCELLED: 'Zrušené',
+};
+
+const statusColors: Record<string, string> = {
+  DRAFT: 'bg-slate-600 text-slate-200',
+  CONFIRMED: 'bg-blue-600 text-white',
+  IN_PROGRESS: 'bg-amber-500 text-slate-900',
+  COMPLETED: 'bg-emerald-500 text-white',
+  CANCELLED: 'bg-slate-700 text-slate-400',
+};
+
+const serviceStatusLabels: Record<string, string> = {
+  pending: 'Čaká',
+  in_progress: 'Prebieha',
+  completed: 'Hotové',
+  cancelled: 'Zrušené',
+};
+
+const serviceStatusColors: Record<string, string> = {
+  pending: 'text-slate-400',
+  in_progress: 'text-amber-400',
+  completed: 'text-emerald-400',
+  cancelled: 'text-slate-500',
+};
+
+function formatDate(date: Date | number | null): string {
+  if (!date) return '—';
+  try {
+    const d = typeof date === 'number' ? new Date(date) : new Date(date);
+    return format(d, 'd. MMMM yyyy', { locale: sk });
+  } catch {
+    return '—';
+  }
+}
+
+// Workflow steps for visualization
+const workflowSteps = [
+  { key: 'CONFIRMED', label: 'Potvrdené', icon: '✓' },
+  { key: 'IN_PROGRESS', label: 'V príprave', icon: '⚙️' },
+  { key: 'COMPLETED', label: 'Dokončené', icon: '🎉' },
+];
+
+const currentStepIndex = workflowSteps.findIndex(s => s.key === order.status);
+
+// Group services by department
+interface DepartmentGroup {
+  name: string;
+  services: typeof services;
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  totalPrice: number;
+}
+
+const departmentMap = new Map<string, typeof services>();
+services.forEach(service => {
+  const dept = service.departmentName || 'Ostatné';
+  if (!departmentMap.has(dept)) {
+    departmentMap.set(dept, []);
+  }
+  departmentMap.get(dept)!.push(service);
+});
+
+// Calculate department status based on its services
+function getDepartmentStatus(deptServices: typeof services): DepartmentGroup['status'] {
+  const statuses = deptServices.map(s => s.status);
+  if (statuses.every(s => s === 'completed')) return 'completed';
+  if (statuses.some(s => s === 'in_progress')) return 'in_progress';
+  if (statuses.some(s => s === 'completed')) return 'in_progress';
+  return 'pending';
+}
+
+const departments: DepartmentGroup[] = Array.from(departmentMap.entries()).map(([name, deptServices]) => ({
+  name,
+  services: deptServices,
+  status: getDepartmentStatus(deptServices),
+  totalPrice: deptServices.reduce((sum, s) => sum + (s.totalPrice || 0), 0),
+}));
+
+// Department icons
+const departmentIcons: Record<string, string> = {
+  'Veľkoformátová tlač': '🖨️',
+  'FINALIZÁCIA / BALENIE': '📦',
+  'FAKTURÁCIA': '📄',
+  'polep áut': '🚗',
+  'Ostatné': '📋',
+};
+---
+
+<Layout title={order.name}>
+  <main class="min-h-screen">
+    <DashboardHeader customerName={session.customerName} />
+    
+    <div class="max-w-4xl mx-auto px-4 py-8">
+      <!-- Back button -->
+      <a href="/dashboard" class="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-6">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        Späť na prehľad
+      </a>
+
+      <!-- Order header -->
+      <div class="glass rounded-3xl p-8 mb-6 animate-fade-in-up">
+        <div class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
+          <div>
+            <div class="flex items-center gap-3 mb-2">
+              <span class="font-mono text-sm text-blue-400">{order.orderNumber}</span>
+              <span class={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[order.status]}`}>
+                {statusLabels[order.status]}
+              </span>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-bold text-white">{order.name}</h1>
+          </div>
+          
+          {order.totalValue && order.totalValue > 0 && (
+            <div class="text-right">
+              <div class="text-3xl font-bold text-white">
+                {order.totalValue.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+              </div>
+              <div class="text-sm text-slate-400">Celková hodnota</div>
+            </div>
+          )}
+        </div>
+
+        <!-- Dates -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div class="glass-light rounded-xl p-4">
+            <div class="text-slate-400 mb-1">Vytvorené</div>
+            <div class="text-white font-medium">{formatDate(order.createdAt)}</div>
+          </div>
+          <div class="glass-light rounded-xl p-4">
+            <div class="text-slate-400 mb-1">Začiatok</div>
+            <div class="text-white font-medium">{formatDate(order.startDate)}</div>
+          </div>
+          <div class="glass-light rounded-xl p-4">
+            <div class="text-slate-400 mb-1">Plánovaný termín</div>
+            <div class="text-white font-medium">{formatDate(order.plannedEndDate)}</div>
+          </div>
+          <div class="glass-light rounded-xl p-4">
+            <div class="text-slate-400 mb-1">Dokončené</div>
+            <div class="text-white font-medium">{formatDate(order.actualEndDate)}</div>
+          </div>
+        </div>
+
+        <!-- Action button - Cenová ponuka -->
+        <div class="mt-6 pt-6 border-t border-slate-700/50">
+          <a 
+            href={`/order/${id}/quote`}
+            class="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Zobraziť cenovú ponuku
+          </a>
+        </div>
+      </div>
+
+      <!-- Progress section -->
+      <div class="glass rounded-3xl p-8 mb-6 animate-fade-in-up stagger-1">
+        <h2 class="text-xl font-semibold text-white mb-6">Priebeh zákazky</h2>
+        
+        <!-- Progress bar -->
+        <div class="mb-8">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm text-slate-400">Celkový progres</span>
+            <span class="text-sm font-medium text-white">{progressPercent}%</span>
+          </div>
+          <div class="h-3 bg-slate-700/50 rounded-full overflow-hidden">
+            <div 
+              class="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-1000 ease-out"
+              style={`width: ${progressPercent}%`}
+            ></div>
+          </div>
+        </div>
+
+        <!-- Workflow visualization -->
+        <div class="relative">
+          <div class="absolute top-8 left-0 right-0 h-1 bg-slate-700/50 rounded-full"></div>
+          <div 
+            class="absolute top-8 left-0 h-1 bg-blue-500 rounded-full transition-all duration-1000"
+            style={`width: ${Math.max(0, ((currentStepIndex + 1) / workflowSteps.length) * 100)}%`}
+          ></div>
+          
+          <div class="relative flex justify-between">
+            {workflowSteps.map((step, index) => (
+              <div class="flex flex-col items-center" key={step.key}>
+                <div class:list={[
+                  "w-16 h-16 rounded-2xl flex items-center justify-center text-2xl transition-all duration-500",
+                  index <= currentStepIndex ? "bg-blue-600 glow-primary" : "bg-slate-700/50",
+                  index === currentStepIndex && "ring-4 ring-blue-400/30 animate-pulse-glow"
+                ]}>
+                  {step.icon}
+                </div>
+                <span class:list={[
+                  "mt-3 text-sm font-medium",
+                  index <= currentStepIndex ? "text-white" : "text-slate-500"
+                ]}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <!-- Departments with services -->
+      {departments.length > 0 && (
+        <div class="glass rounded-3xl p-8 animate-fade-in-up stagger-2">
+          <h2 class="text-xl font-semibold text-white mb-6">
+            Oddelenia ({departments.length})
+          </h2>
+          
+          <div class="space-y-4">
+            {departments.map((dept, deptIndex) => (
+              <details class="group" open={deptIndex === 0}>
+                <summary class="glass-light rounded-xl p-5 cursor-pointer list-none hover:bg-white/5 transition-colors">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                      <div class="text-2xl">
+                        {departmentIcons[dept.name] || '📋'}
+                      </div>
+                      <div>
+                        <div class="font-semibold text-white text-lg">{dept.name}</div>
+                        <div class="text-sm text-slate-400">{dept.services.length} {dept.services.length === 1 ? 'služba' : dept.services.length < 5 ? 'služby' : 'služieb'}</div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                      <div class="text-right">
+                        <div class={`text-sm font-bold px-3 py-1 rounded-full ${
+                          dept.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                          dept.status === 'in_progress' ? 'bg-amber-500/20 text-amber-400' :
+                          'bg-slate-500/20 text-slate-400'
+                        }`}>
+                          {serviceStatusLabels[dept.status]}
+                        </div>
+                        {dept.totalPrice > 0 && (
+                          <div class="text-white font-semibold mt-1">
+                            {dept.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+                          </div>
+                        )}
+                      </div>
+                      <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </summary>
+                
+                <div class="mt-3 ml-4 space-y-2">
+                  {dept.services.map((service) => (
+                    <div class="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30">
+                      <div class="flex items-center gap-3">
+                        <div class={`w-2 h-2 rounded-full ${
+                          service.status === 'completed' ? 'bg-emerald-400' :
+                          service.status === 'in_progress' ? 'bg-amber-400' :
+                          'bg-slate-400'
+                        }`}></div>
+                        <div>
+                          <div class="text-white text-sm font-medium">{service.serviceName}</div>
+                          {service.quantity && (
+                            <div class="text-xs text-slate-500">
+                              {service.quantity.toLocaleString('sk-SK', { maximumFractionDigits: 2 })} {service.unit || 'ks'}
+                              {service.salePrice && ` × ${service.salePrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €`}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div class="text-right">
+                        <div class={`text-xs font-medium ${serviceStatusColors[service.status]}`}>
+                          {serviceStatusLabels[service.status]}
+                        </div>
+                        {service.totalPrice && service.totalPrice > 0 && (
+                          <div class="text-sm text-white font-medium">
+                            {service.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <!-- Empty state for services -->
+      {services.length === 0 && (
+        <div class="glass rounded-3xl p-8 text-center animate-fade-in-up stagger-2">
+          <div class="text-4xl mb-3">📋</div>
+          <p class="text-slate-400">Detaily služieb budú dostupné čoskoro.</p>
+        </div>
+      )}
+    </div>
+  </main>
+</Layout>

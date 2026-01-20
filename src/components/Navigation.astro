@@ -1,0 +1,29 @@
+---
+interface Props {
+  active: 'orders' | 'quotes';
+}
+
+const { active } = Astro.props;
+
+const navItems = [
+  { id: 'orders', label: 'Aktívne zákazky', href: '/dashboard', icon: '📦' },
+  { id: 'quotes', label: 'Cenové ponuky', href: '/quotes', icon: '💰' },
+];
+---
+
+<nav class="flex gap-2 mb-8 overflow-x-auto pb-2">
+  {navItems.map((item) => (
+    <a 
+      href={item.href}
+      class:list={[
+        "flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all",
+        active === item.id 
+          ? "bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-lg shadow-primary-600/20" 
+          : "glass-light text-slate-300 hover:text-white hover:bg-white/10"
+      ]}
+    >
+      <span class="text-lg">{item.icon}</span>
+      <span>{item.label}</span>
+    </a>
+  ))}
+</nav>

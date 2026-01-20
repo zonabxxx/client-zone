@@ -1,0 +1,98 @@
+---
+import type { Order } from '../lib/db';
+import { format } from 'date-fns';
+import { sk } from 'date-fns/locale';
+
+interface Props {
+  order: Order;
+  index: number;
+}
+
+const { order, index } = Astro.props;
+
+const statusLabels: Record<string, string> = {
+  DRAFT: 'Koncept',
+  CONFIRMED: 'Potvrdené',
+  IN_PROGRESS: 'Prebieha',
+  COMPLETED: 'Dokončené',
+  CANCELLED: 'Zrušené',
+};
+
+const statusColors: Record<string, string> = {
+  DRAFT: 'bg-slate-600 text-slate-200',
+  CONFIRMED: 'bg-blue-600 text-white',
+  IN_PROGRESS: 'bg-amber-500 text-slate-900',
+  COMPLETED: 'bg-emerald-500 text-white',
+  CANCELLED: 'bg-slate-700 text-slate-400',
+};
+
+const priorityColors: Record<string, string> = {
+  low: 'border-l-slate-500',
+  medium: 'border-l-blue-500',
+  high: 'border-l-amber-500',
+  critical: 'border-l-red-500',
+};
+
+function formatDate(date: Date | null): string {
+  if (!date) return '—';
+  try {
+    const d = typeof date === 'number' ? new Date(date) : new Date(date);
+    return format(d, 'd. MMM yyyy', { locale: sk });
+  } catch {
+    return '—';
+  }
+}
+---
+
+<a 
+  href={`/order/${order.id}`}
+  class={`order-card block glass rounded-2xl p-6 hover:bg-white/5 transition-all duration-200 border-l-4 ${priorityColors[order.priority]} animate-fade-in-up`}
+  style={`animation-delay: ${index * 0.05}s`}
+  data-status={order.status}
+>
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <!-- Order info -->
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="font-mono text-sm text-primary-400">{order.orderNumber}</span>
+        <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status]}`}>
+          {statusLabels[order.status]}
+        </span>
+      </div>
+      <h3 class="text-lg font-semibold text-white truncate">{order.name}</h3>
+      <div class="flex items-center gap-4 mt-2 text-sm text-slate-400">
+        <span class="flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          {formatDate(order.createdAt)}
+        </span>
+        {order.plannedEndDate && (
+          <span class="flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Termín: {formatDate(order.plannedEndDate)}
+          </span>
+        )}
+      </div>
+    </div>
+
+    <!-- Value and arrow -->
+    <div class="flex items-center gap-4">
+      {order.totalValue && order.totalValue > 0 && (
+        <div class="text-right">
+          <div class="text-xl font-bold text-white">
+            {order.totalValue.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+          </div>
+          <div class="text-xs text-slate-400">
+            {order.servicesCount} {order.servicesCount === 1 ? 'služba' : order.servicesCount && order.servicesCount < 5 ? 'služby' : 'služieb'}
+          </div>
+        </div>
+      )}
+      <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+      </svg>
+    </div>
+  </div>
+</a>

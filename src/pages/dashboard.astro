@@ -1,0 +1,132 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getSessionFromCookie } from '../lib/session';
+import { getCustomerOrders } from '../lib/db';
+import OrderCard from '../components/OrderCard.astro';
+import DashboardHeader from '../components/DashboardHeader.astro';
+import Navigation from '../components/Navigation.astro';
+
+// Check authentication
+const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
+
+if (!session) {
+  return Astro.redirect('/');
+}
+
+// Fetch customer orders
+const orders = await getCustomerOrders(session.customerId, session.customerName);
+
+// Calculate stats
+const stats = {
+  total: orders.length,
+  active: orders.filter(o => ['CONFIRMED', 'IN_PROGRESS'].includes(o.status)).length,
+  completed: orders.filter(o => o.status === 'COMPLETED').length,
+  totalValue: orders.reduce((sum, o) => sum + (o.totalValue || 0), 0),
+};
+---
+
+<Layout title="Moje zákazky">
+  <main class="min-h-screen">
+    <DashboardHeader customerName={session.customerName} />
+    
+    <div class="max-w-6xl mx-auto px-4 py-8">
+      <Navigation active="orders" />
+      
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="glass rounded-2xl p-6 animate-fade-in-up">
+          <div class="text-3xl font-bold text-white mb-1">{stats.total}</div>
+          <div class="text-slate-400 text-sm">Celkom zákaziek</div>
+        </div>
+        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-1">
+          <div class="text-3xl font-bold text-amber-400 mb-1">{stats.active}</div>
+          <div class="text-slate-400 text-sm">Aktívne</div>
+        </div>
+        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-2">
+          <div class="text-3xl font-bold text-emerald-400 mb-1">{stats.completed}</div>
+          <div class="text-slate-400 text-sm">Dokončené</div>
+        </div>
+        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-3">
+          <div class="text-3xl font-bold text-blue-400 mb-1">
+            {stats.totalValue.toLocaleString('sk-SK', { minimumFractionDigits: 0 })} €
+          </div>
+          <div class="text-slate-400 text-sm">Celková hodnota</div>
+        </div>
+      </div>
+
+      <!-- Filter tabs -->
+      <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
+        <button data-filter="all" class="filter-btn active px-4 py-2 rounded-xl text-sm font-medium transition-all">
+          Všetky
+        </button>
+        <button data-filter="active" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all">
+          Aktívne
+        </button>
+        <button data-filter="completed" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all">
+          Dokončené
+        </button>
+      </div>
+
+      <!-- Orders list -->
+      {orders.length === 0 ? (
+        <div class="glass rounded-3xl p-12 text-center animate-fade-in-up">
+          <div class="text-6xl mb-4">📭</div>
+          <h2 class="text-xl font-semibold text-white mb-2">Zatiaľ žiadne zákazky</h2>
+          <p class="text-slate-400">Vaše zákazky sa tu zobrazia hneď ako budú vytvorené.</p>
+        </div>
+      ) : (
+        <div class="space-y-4" id="ordersContainer">
+          {orders.map((order, index) => (
+            <OrderCard order={order} index={index} />
+          ))}
+        </div>
+      )}
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .filter-btn {
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    border: 1px solid transparent;
+  }
+  
+  .filter-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+  }
+  
+  .filter-btn.active {
+    background: #0552b5;
+    color: white;
+    border-color: #0967d2;
+  }
+</style>
+
+<script>
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  const orderCards = document.querySelectorAll('.order-card');
+  
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Update active state
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      const filter = btn.getAttribute('data-filter');
+      
+      orderCards.forEach(card => {
+        const status = card.getAttribute('data-status');
+        const isActive = ['CONFIRMED', 'IN_PROGRESS'].includes(status || '');
+        const isCompleted = status === 'COMPLETED';
+        
+        let show = true;
+        if (filter === 'active') show = isActive;
+        if (filter === 'completed') show = isCompleted;
+        
+        (card as HTMLElement).style.display = show ? 'block' : 'none';
+      });
+    });
+  });
+</script>
