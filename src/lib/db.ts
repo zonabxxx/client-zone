@@ -1433,6 +1433,147 @@ export async function updateQuoteResponse(
   }
 }
 
+// Get quote bundle by token (public bundle page)
+export interface QuoteBundleItem {
+  id: string;
+  name: string;
+  description: string | null;
+  totalPrice: number | null;
+  shareUrl: string | null;
+}
+
+export interface QuoteBundleData {
+  bundle: {
+    id: string;
+    name: string | null;
+    expiresAt: Date | null;
+    status: string;
+  };
+  items: QuoteBundleItem[];
+  organization: {
+    name: string;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    ico: string | null;
+    vatRate: number | null;
+  } | null;
+}
+
+export async function getQuoteBundleByToken(
+  bundleId: string,
+  token: string
+): Promise<QuoteBundleData | null> {
+  try {
+    const db = getClient();
+    
+    // Get bundle data
+    const bundleResult = await db.execute({
+      sql: `SELECT id, token, calculation_ids, item_share_tokens, expires_at, status, organization_id, project_name
+            FROM calculation_quote_bundles 
+            WHERE id = ? AND token = ?
+            LIMIT 1`,
+      args: [bundleId, token]
+    });
+    
+    if (bundleResult.rows.length === 0) return null;
+    
+    const bundleRow = bundleResult.rows[0];
+    const calculationIdsRaw = bundleRow.calculation_ids as string;
+    const itemShareTokensRaw = bundleRow.item_share_tokens as string;
+    const organizationId = bundleRow.organization_id as string | null;
+    
+    let calculationIds: string[] = [];
+    let itemShareTokens: Record<string, string> = {};
+    
+    try {
+      calculationIds = JSON.parse(calculationIdsRaw);
+      itemShareTokens = JSON.parse(itemShareTokensRaw || '{}');
+    } catch { /* ignore */ }
+    
+    // Get calculation details for each item
+    const items: QuoteBundleItem[] = [];
+    
+    for (const calcId of calculationIds) {
+      // Find calculation entity
+      const entityResult = await db.execute({
+        sql: `SELECT e.id as entityId 
+              FROM entities e 
+              JOIN attributes a ON e.id = a.entity_id 
+              WHERE e.table_id = ? 
+                AND a.attribute_name = 'id' 
+                AND a.string_value = ?
+              LIMIT 1`,
+        args: [EAV_TABLES.calculations, calcId]
+      });
+      
+      if (entityResult.rows.length === 0) continue;
+      
+      const entityId = entityResult.rows[0].entityId as string;
+      
+      // Get calculation attributes
+      const attrsResult = await db.execute({
+        sql: `SELECT attribute_name, string_value, number_value 
+              FROM attributes WHERE entity_id = ? 
+                AND attribute_name IN ('name', 'description', 'actualTotalPrice', 'totalPrice')`,
+        args: [entityId]
+      });
+      
+      const data: Record<string, any> = {};
+      for (const row of attrsResult.rows) {
+        const name = row.attribute_name as string;
+        data[name] = row.string_value || row.number_value;
+      }
+      
+      const itemToken = itemShareTokens[calcId];
+      
+      items.push({
+        id: calcId,
+        name: data.name || 'Kalkulácia',
+        description: data.description || null,
+        totalPrice: Number(data.actualTotalPrice || data.totalPrice) || null,
+        shareUrl: itemToken ? `/quote/${calcId}/${itemToken}` : null,
+      });
+    }
+    
+    // Get organization data if available
+    let organization: QuoteBundleData['organization'] = null;
+    if (organizationId) {
+      const orgResult = await db.execute({
+        sql: `SELECT name, email, phone, address, ico, vat_rate as vatRate
+              FROM organizations WHERE id = ? LIMIT 1`,
+        args: [organizationId]
+      });
+      
+      if (orgResult.rows.length > 0) {
+        const orgRow = orgResult.rows[0];
+        organization = {
+          name: orgRow.name as string,
+          email: orgRow.email as string | null,
+          phone: orgRow.phone as string | null,
+          address: orgRow.address as string | null,
+          ico: orgRow.ico as string | null,
+          vatRate: orgRow.vatRate as number | null,
+        };
+      }
+    }
+    
+    return {
+      bundle: {
+        id: bundleRow.id as string,
+        name: bundleRow.project_name as string | null,
+        expiresAt: bundleRow.expires_at ? new Date((bundleRow.expires_at as number) * 1000) : null,
+        status: bundleRow.status as string,
+      },
+      items,
+      organization,
+    };
+  } catch (error) {
+    console.error('Error getting quote bundle by token:', error);
+    return null;
+  }
+}
+
 // Check if database is configured
 export function isDatabaseConfigured(): boolean {
   return !!DB_URL;
