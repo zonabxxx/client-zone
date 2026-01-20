@@ -226,15 +226,71 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                   Produkty
                 </h4>
                 <div class="space-y-2">
-                  {products.map((p: any, idx: number) => (
-                    <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
-                      <span class="text-slate-300 font-medium">
-                        {getProductName(p)}
-                        <span class="text-slate-500 font-normal ml-2">× {Number(p.quantity) || 1} ks</span>
-                      </span>
-                      <span class="font-semibold text-white">{formatCurrency(computeProductTotal(p))}</span>
-                    </div>
-                  ))}
+                  {products.map((p: any, idx: number) => {
+                    const specs = p.templateConfigLabels || {};
+                    const hasSpecs = Object.keys(specs).length > 0;
+                    const description = p.variant?.description || p.product?.description || '';
+                    
+                    return (
+                      <div class="py-3 px-4 bg-slate-800/50 rounded-lg">
+                        <div class="flex justify-between items-start mb-2">
+                          <span class="text-slate-300 font-medium">
+                            {getProductName(p)}
+                            <span class="text-slate-500 font-normal ml-2">× {Number(p.quantity) || 1} ks</span>
+                          </span>
+                          <span class="font-semibold text-white">{formatCurrency(computeProductTotal(p))}</span>
+                        </div>
+                        
+                        {/* Product Specifications */}
+                        {hasSpecs && (
+                          <div class="mt-2 pt-2 border-t border-slate-700/50">
+                            <div class="flex flex-wrap gap-2 text-xs">
+                              {specs.format && (
+                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
+                                  📐 {specs.format}
+                                </span>
+                              )}
+                              {specs.papier && (
+                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
+                                  📄 {specs.papier}
+                                </span>
+                              )}
+                              {specs.gramaz && (
+                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
+                                  ⚖️ {specs.gramaz}
+                                </span>
+                              )}
+                              {specs.tlac && (
+                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
+                                  🖨️ {specs.tlac}
+                                </span>
+                              )}
+                              {specs.lamino && (
+                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
+                                  ✨ {specs.lamino}
+                                </span>
+                              )}
+                              {specs.sklad && specs.sklad !== 'Bez skladu' && (
+                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
+                                  📁 {specs.sklad}
+                                </span>
+                              )}
+                              {specs.dokoncenie && (
+                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
+                                  ✂️ {specs.dokoncenie}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Fallback to description if no specs */}
+                        {!hasSpecs && description && (
+                          <p class="mt-2 text-xs text-slate-500">{description}</p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
