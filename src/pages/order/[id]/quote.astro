@@ -83,11 +83,11 @@ const fromParam = Astro.url.searchParams.get('from');
 const backUrl = fromParam === 'quotes' ? '/quotes' : `/order/${id}`;
 const backLabel = fromParam === 'quotes' ? 'Späť na cenové ponuky' : 'Späť na zákazku';
 
-// Calculate totals
-const subtotal = Math.round(products.reduce((sum, p) => sum + (p.totalPrice || 0), 0) * 100) / 100;
+// Calculate totals - prices from calculation are ALREADY WITH VAT
 const vatRate = 20; // 20% DPH
-const vatAmount = Math.round(subtotal * (vatRate / 100) * 100) / 100;
-const totalWithVat = Math.round((subtotal + vatAmount) * 100) / 100;
+const totalWithVat = Math.round(products.reduce((sum, p) => sum + (p.totalPrice || 0), 0) * 100) / 100;
+const subtotal = Math.round((totalWithVat / (1 + vatRate / 100)) * 100) / 100;
+const vatAmount = Math.round((totalWithVat - subtotal) * 100) / 100;
 
 function formatDate(date: Date | number | null): string {
   if (!date) return '—';

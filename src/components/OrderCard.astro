@@ -78,18 +78,8 @@ function formatDate(date: Date | null): string {
       </div>
     </div>
 
-    <!-- Value and arrow -->
-    <div class="flex items-center gap-4">
-      {order.totalValue && order.totalValue > 0 && (
-        <div class="text-right">
-          <div class="text-xl font-bold text-white">
-            {order.totalValue.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
-          </div>
-          <div class="text-xs text-slate-400">
-            {order.servicesCount} {order.servicesCount === 1 ? 'služba' : order.servicesCount && order.servicesCount < 5 ? 'služby' : 'služieb'}
-          </div>
-        </div>
-      )}
+    <!-- Arrow -->
+    <div class="flex items-center">
       <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
       </svg>

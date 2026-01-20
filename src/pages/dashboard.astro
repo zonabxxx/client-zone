@@ -33,7 +33,7 @@ const stats = {
       <Navigation active="orders" />
       
       <!-- Stats Grid -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div class="grid grid-cols-3 gap-4 mb-8">
         <div class="glass rounded-2xl p-6 animate-fade-in-up">
           <div class="text-3xl font-bold text-white mb-1">{stats.total}</div>
           <div class="text-slate-400 text-sm">Celkom zákaziek</div>
@@ -45,12 +45,6 @@ const stats = {
         <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-2">
           <div class="text-3xl font-bold text-emerald-400 mb-1">{stats.completed}</div>
           <div class="text-slate-400 text-sm">Dokončené</div>
-        </div>
-        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-3">
-          <div class="text-3xl font-bold text-blue-400 mb-1">
-            {stats.totalValue.toLocaleString('sk-SK', { minimumFractionDigits: 0 })} €
-          </div>
-          <div class="text-slate-400 text-sm">Celková hodnota</div>
         </div>
       </div>
 
