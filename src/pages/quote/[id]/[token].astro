@@ -35,6 +35,32 @@ const products = calculationData.products || [];
 const services = calculationData.services || [];
 const materials = calculationData.materials || [];
 
+// Helper to get full product name (including template/variant)
+function getProductName(p: any): string {
+  // Try to get template name first
+  const templateName = p.productTemplate?.name || p.template?.name || '';
+  
+  // Get product category/name
+  const productName = p.product?.name || p.product?.categoryName || p.name || '';
+  
+  // Get variant name
+  const variantName = p.variant?.name || p.variant?.variantName || '';
+  
+  // Build full name
+  if (templateName) {
+    if (variantName && variantName !== templateName) {
+      return `${templateName} - ${variantName}`;
+    }
+    return templateName;
+  }
+  
+  if (productName && variantName && variantName !== productName) {
+    return `${productName} - ${variantName}`;
+  }
+  
+  return variantName || productName || 'Produkt';
+}
+
 // Get client info
 const clientName = calculationData.selectedClient?.name || calculation.companyName || '';
 
@@ -153,7 +179,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                 <div class="text-left">
                   <div class="font-semibold text-white">{products.length} {products.length === 1 ? 'produkt' : 'produkty'}</div>
                   <div class="text-xs text-slate-400">
-                    {products.slice(0, 2).map((p: any) => p.product?.name || 'Produkt').join(', ')}
+                    {products.slice(0, 2).map((p: any) => getProductName(p)).join(', ')}
                     {products.length > 2 && '...'}
                   </div>
                 </div>
@@ -203,7 +229,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                   {products.map((p: any, idx: number) => (
                     <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
                       <span class="text-slate-300 font-medium">
-                        {p.product?.name || 'Produkt'}
+                        {getProductName(p)}
                         <span class="text-slate-500 font-normal ml-2">× {Number(p.quantity) || 1} ks</span>
                       </span>
                       <span class="font-semibold text-white">{formatCurrency(computeProductTotal(p))}</span>
