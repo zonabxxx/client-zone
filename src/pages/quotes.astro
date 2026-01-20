@@ -1,7 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { getSessionFromCookie } from '../lib/session';
-import { getClientCalculations, getOrderByCalculationId } from '../lib/db';
+import { getClientCalculations, getOrderByCalculationId, getClientProjects, type Project, type Calculation } from '../lib/db';
 import DashboardHeader from '../components/DashboardHeader.astro';
 import Navigation from '../components/Navigation.astro';
 import { format } from 'date-fns';
@@ -13,8 +13,9 @@ if (!session) {
   return Astro.redirect('/');
 }
 
-// Initial load - only first 20 items (optimized with batch loading)
-const result = await getClientCalculations(session.customerId, session.customerName, { limit: 20, offset: 0 });
+// Load projects and calculations
+const projectsResult = await getClientProjects(session.customerId, session.customerName, { limit: 50, offset: 0 });
+const result = await getClientCalculations(session.customerId, session.customerName, { limit: 100, offset: 0 });
 
 // Get order IDs for calculations (to link to existing quote pages)
 const calculationsWithOrders = await Promise.all(
@@ -28,15 +29,41 @@ const calculationsWithOrders = await Promise.all(
 );
 
 const calculations = calculationsWithOrders;
+const projects = projectsResult.items;
+
+// Group calculations by project
+const projectsMap = new Map<string, { project: Project; calculations: typeof calculations }>();
+
+// Add projects with empty calculation arrays
+for (const project of projects) {
+  projectsMap.set(project.id, { project, calculations: [] });
+}
+
+// Add calculations without project as "Nezaradené"
+const unassignedCalcs: typeof calculations = [];
+
+for (const calc of calculations) {
+  if (calc.projectId && projectsMap.has(calc.projectId)) {
+    projectsMap.get(calc.projectId)!.calculations.push(calc);
+  } else {
+    unassignedCalcs.push(calc);
+  }
+}
+
+// Convert to array and sort by project name
+const groupedProjects = Array.from(projectsMap.values())
+  .filter(g => g.calculations.length > 0)
+  .sort((a, b) => a.project.name.localeCompare(b.project.name));
+
 const hasMore = result.hasMore;
 const totalCount = result.total;
 
 // Stats
 const stats = {
   total: totalCount,
-  draft: calculations.filter(c => c.approvalStatus === 'DRAFT').length,
-  pending: calculations.filter(c => c.approvalStatus === 'CLIENT_VIEWED').length,
+  projects: groupedProjects.length,
   approved: calculations.filter(c => c.approvalStatus === 'CLIENT_APPROVED').length,
+  pending: calculations.filter(c => c.approvalStatus === 'CLIENT_VIEWED').length,
 };
 
 // Approval status labels and colors
@@ -70,17 +97,17 @@ function formatDate(date: Date | null): string {
           <div class="text-3xl font-bold text-white mb-1">{stats.total}</div>
           <div class="text-slate-400 text-sm">Celkom ponúk</div>
         </div>
-        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-1 border border-emerald-500/30 bg-emerald-500/5">
+        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-1">
+          <div class="text-3xl font-bold text-blue-400 mb-1">{stats.projects}</div>
+          <div class="text-slate-400 text-sm">Projektov</div>
+        </div>
+        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-2 border border-emerald-500/30 bg-emerald-500/5">
           <div class="text-3xl font-bold text-emerald-400 mb-1">{stats.approved}</div>
           <div class="text-slate-400 text-sm">Schválených</div>
         </div>
-        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-2">
+        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-3">
           <div class="text-3xl font-bold text-amber-400 mb-1">{stats.pending}</div>
           <div class="text-slate-400 text-sm">Čaká na vás</div>
-        </div>
-        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-3">
-          <div class="text-3xl font-bold text-slate-400 mb-1">{stats.draft}</div>
-          <div class="text-slate-400 text-sm">V príprave</div>
         </div>
       </div>
 
@@ -106,124 +133,175 @@ function formatDate(date: Date | null): string {
           <p class="text-slate-400">Vaše cenové ponuky sa tu zobrazia hneď ako budú vytvorené.</p>
         </div>
       ) : (
-        <div class="space-y-4" id="calculationsContainer">
-          {calculations.map((calc, index) => {
-            const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
-            const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
-            // Use internal quote page if order exists, otherwise no link
-            // Add ?from=quotes so the back button knows where to return
-            const quoteUrl = calc.orderId ? `/order/${calc.orderId}/quote?from=quotes` : null;
+        <div class="space-y-6" id="calculationsContainer">
+          {/* Projects with calculations */}
+          {groupedProjects.map((group, projectIndex) => {
+            const projectApproved = group.calculations.filter(c => c.approvalStatus === 'CLIENT_APPROVED').length;
+            const projectTotal = group.calculations.length;
+            const allApproved = projectApproved === projectTotal;
             
             return (
-              <a 
-                href={quoteUrl || '#'}
-                class:list={[quoteUrl ? '' : 'pointer-events-none']}
-                class:list={[
-                  "calculation-card block rounded-2xl p-6 transition-all animate-fade-in-up cursor-pointer",
-                  isApproved 
-                    ? "bg-emerald-500/20 border-2 border-emerald-500/50 hover:bg-emerald-500/30" 
-                    : "glass hover:bg-white/10 hover:scale-[1.01]"
-                ]}
-                style={`animation-delay: ${index * 50}ms`}
-                data-status={calc.approvalStatus}
+              <details 
+                class={`project-group rounded-2xl overflow-hidden animate-fade-in-up ${allApproved ? 'border-2 border-emerald-500/50 bg-emerald-500/10' : 'glass'}`}
+                style={`animation-delay: ${projectIndex * 50}ms`}
+                open
               >
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-3 mb-2">
-                      <span class="text-2xl">{isApproved ? '✅' : '💰'}</span>
-                      <div>
-                        <div class="flex items-center gap-2 mb-1">
-                          <span class="font-mono text-xs text-blue-400">{calc.calculationNumber}</span>
-                          {isApproved ? (
-                            <span class="px-2 py-0.5 bg-emerald-500 text-white text-xs font-bold rounded-full">
-                              SCHVÁLENÉ
-                            </span>
-                          ) : (
-                            <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color} ${status.bgColor}`}>
-                              {status.label}
-                            </span>
-                          )}
-                        </div>
-                        <h3 class:list={[
-                          "text-lg font-semibold",
-                          isApproved ? "text-emerald-100" : "text-white"
-                        ]}>{calc.name}</h3>
-                      </div>
-                    </div>
-                    {calc.description && !isApproved && (
-                      <p class="text-sm text-slate-400 mb-2 line-clamp-2">{calc.description}</p>
-                    )}
-                    <div class="flex flex-wrap gap-4 text-sm text-slate-400">
-                      <span class="flex items-center gap-1">
-                        <span>📅</span>
-                        {formatDate(calc.updatedAt)}
-                      </span>
-                      {!quoteUrl && (
-                        <span class="flex items-center gap-1 text-slate-500">
-                          <span>⏳</span>
-                          Ponuka ešte nie je pripravená
-                        </span>
-                      )}
-                    </div>
-                    {isApproved && (
-                      <div class="mt-3 flex items-center gap-2 text-sm text-emerald-300">
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                        </svg>
-                        <span>Táto cenová ponuka bola schválená. Zákazka je v realizácii.</span>
-                      </div>
-                    )}
-                  </div>
-                  
+                <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-white/5 transition-colors">
                   <div class="flex items-center gap-4">
-                    {calc.totalPrice && calc.totalPrice > 0 && (
-                      <div class="text-right">
-                        <div class:list={[
-                          "text-xl font-bold",
-                          isApproved ? "text-emerald-300" : "text-emerald-400"
-                        ]}>
-                          {calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
-                        </div>
-                        <div class="text-xs text-slate-400">Celková cena</div>
+                    <span class="text-2xl">📁</span>
+                    <div>
+                      <h3 class="text-lg font-semibold text-white">{group.project.name}</h3>
+                      <div class="flex items-center gap-3 text-sm text-slate-400">
+                        <span>{projectTotal} {projectTotal === 1 ? 'ponuka' : projectTotal < 5 ? 'ponuky' : 'ponúk'}</span>
+                        {projectApproved > 0 && (
+                          <span class="flex items-center gap-1 text-emerald-400">
+                            <span>✅</span> {projectApproved} schválených
+                          </span>
+                        )}
                       </div>
-                    )}
-                    
-                    <div class="flex items-center">
-                      {quoteUrl ? (
-                        <div class:list={[
-                          "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl",
-                          isApproved 
-                            ? "bg-emerald-600 text-white"
-                            : "bg-primary-600 text-white"
-                        ]}>
-                          <span>Zobraziť</span>
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                          </svg>
-                        </div>
-                      ) : (
-                        <div class="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-slate-600/50 text-slate-400">
-                          <span>Čaká sa</span>
-                        </div>
-                      )}
                     </div>
+                  </div>
+                  <div class="flex items-center gap-4">
+                    <div class="text-right">
+                      <div class="text-lg font-bold text-emerald-400">
+                        {group.project.totalPrice?.toLocaleString('sk-SK', { minimumFractionDigits: 2 }) || '0,00'} €
+                      </div>
+                      <div class="text-xs text-slate-400">Celkom</div>
+                    </div>
+                    <svg class="w-5 h-5 text-slate-400 transition-transform project-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </summary>
+                
+                <div class="border-t border-white/10 bg-black/20">
+                  <div class="p-4 space-y-3">
+                    {group.calculations.map((calc) => {
+                      const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
+                      const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
+                      const quoteUrl = calc.orderId ? `/order/${calc.orderId}/quote?from=quotes` : null;
+                      
+                      return (
+                        <a 
+                          href={quoteUrl || '#'}
+                          class={`calculation-card block rounded-xl p-4 transition-all cursor-pointer ${quoteUrl ? '' : 'pointer-events-none'} ${isApproved ? 'bg-emerald-500/15 hover:bg-emerald-500/25' : 'bg-white/5 hover:bg-white/10'}`}
+                          data-status={calc.approvalStatus}
+                        >
+                          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div class="flex-1">
+                              <div class="flex items-center gap-2 mb-1">
+                                <span class="text-lg">{isApproved ? '✅' : '💰'}</span>
+                                <span class="font-mono text-xs text-blue-400">{calc.calculationNumber}</span>
+                                {isApproved ? (
+                                  <span class="px-2 py-0.5 bg-emerald-500 text-white text-xs font-bold rounded-full">
+                                    SCHVÁLENÉ
+                                  </span>
+                                ) : (
+                                  <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color} ${status.bgColor}`}>
+                                    {status.label}
+                                  </span>
+                                )}
+                              </div>
+                              <h4 class={`font-medium ${isApproved ? 'text-emerald-100' : 'text-white'}`}>{calc.name}</h4>
+                              <div class="text-xs text-slate-400 mt-1">📅 {formatDate(calc.updatedAt)}</div>
+                            </div>
+                            
+                            <div class="flex items-center gap-3">
+                              {calc.totalPrice && calc.totalPrice > 0 && (
+                                <div class={`text-lg font-bold ${isApproved ? 'text-emerald-300' : 'text-emerald-400'}`}>
+                                  {calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+                                </div>
+                              )}
+                              {quoteUrl ? (
+                                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                              ) : (
+                                <span class="text-xs text-slate-500">⏳</span>
+                              )}
+                            </div>
+                          </div>
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
-              </a>
+              </details>
             );
           })}
-          
-          {/* Load more button */}
-          {hasMore && (
-            <div class="text-center mt-6">
-              <button 
-                id="loadMoreBtn"
-                data-offset="20"
-                class="px-6 py-3 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-xl transition-colors"
-              >
-                Načítať viac ({totalCount - 20} zostáva)
-              </button>
-            </div>
+
+          {/* Unassigned calculations */}
+          {unassignedCalcs.length > 0 && (
+            <details 
+              class="project-group glass rounded-2xl overflow-hidden animate-fade-in-up"
+              open
+            >
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-white/5 transition-colors">
+                <div class="flex items-center gap-4">
+                  <span class="text-2xl">📋</span>
+                  <div>
+                    <h3 class="text-lg font-semibold text-white">Nezaradené ponuky</h3>
+                    <div class="text-sm text-slate-400">{unassignedCalcs.length} ponúk bez projektu</div>
+                  </div>
+                </div>
+                <svg class="w-5 h-5 text-slate-400 transition-transform project-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </summary>
+              
+              <div class="border-t border-white/10 bg-black/20">
+                <div class="p-4 space-y-3">
+                  {unassignedCalcs.map((calc) => {
+                    const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
+                    const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
+                    const quoteUrl = calc.orderId ? `/order/${calc.orderId}/quote?from=quotes` : null;
+                    
+                    return (
+                      <a 
+                        href={quoteUrl || '#'}
+                        class={`calculation-card block rounded-xl p-4 transition-all cursor-pointer ${quoteUrl ? '' : 'pointer-events-none'} ${isApproved ? 'bg-emerald-500/15 hover:bg-emerald-500/25' : 'bg-white/5 hover:bg-white/10'}`}
+                        data-status={calc.approvalStatus}
+                      >
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                          <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                              <span class="text-lg">{isApproved ? '✅' : '💰'}</span>
+                              <span class="font-mono text-xs text-blue-400">{calc.calculationNumber}</span>
+                              {isApproved ? (
+                                <span class="px-2 py-0.5 bg-emerald-500 text-white text-xs font-bold rounded-full">
+                                  SCHVÁLENÉ
+                                </span>
+                              ) : (
+                                <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color} ${status.bgColor}`}>
+                                  {status.label}
+                                </span>
+                              )}
+                            </div>
+                            <h4 class={`font-medium ${isApproved ? 'text-emerald-100' : 'text-white'}`}>{calc.name}</h4>
+                            <div class="text-xs text-slate-400 mt-1">📅 {formatDate(calc.updatedAt)}</div>
+                          </div>
+                          
+                          <div class="flex items-center gap-3">
+                            {calc.totalPrice && calc.totalPrice > 0 && (
+                              <div class={`text-lg font-bold ${isApproved ? 'text-emerald-300' : 'text-emerald-400'}`}>
+                                {calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+                              </div>
+                            )}
+                            {quoteUrl ? (
+                              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                              </svg>
+                            ) : (
+                              <span class="text-xs text-slate-500">⏳</span>
+                            )}
+                          </div>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            </details>
           )}
         </div>
       )}
@@ -263,6 +341,23 @@ function formatDate(date: Date | null): string {
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+  
+  /* Project accordion */
+  .project-group summary {
+    list-style: none;
+  }
+  
+  .project-group summary::-webkit-details-marker {
+    display: none;
+  }
+  
+  .project-group[open] .project-chevron {
+    transform: rotate(180deg);
+  }
+  
+  .project-group summary:focus {
+    outline: none;
   }
 </style>
 

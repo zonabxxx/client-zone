@@ -2,7 +2,7 @@
 import Layout from '../../../layouts/Layout.astro';
 import DashboardHeader from '../../../components/DashboardHeader.astro';
 import { getSessionFromCookie } from '../../../lib/session';
-import { getOrderById, getQuoteProducts, canCustomerAccessOrder, getCalculationShareLink } from '../../../lib/db';
+import { getOrderById, getQuoteProducts, canCustomerAccessOrder, getCalculationShareLink, getCalculationProductDimensions, getCalculationById, getCalculationProducts } from '../../../lib/db';
 import { format } from 'date-fns';
 import { sk } from 'date-fns/locale';
 
@@ -32,24 +32,40 @@ if (!order) {
   return Astro.redirect('/dashboard');
 }
 
-// Get products (grouped services by product ID)
-const products = await getQuoteProducts(id, order.name);
+// Get products from calculation EAV (preferred - has correct prices)
+let products = await getCalculationProducts(order.calculationId);
+
+// Fallback to order_services if no calculation products
+if (products.length === 0) {
+  products = await getQuoteProducts(id, order.name);
+  
+  // Get product dimensions from calculation EAV if not already present
+  const calcDimensions = await getCalculationProductDimensions(order.calculationId);
+  
+  // Merge dimensions from calculation into products
+  if (calcDimensions.size > 0) {
+    products = products.map(product => {
+      if (!product.dimensions && calcDimensions.has(product.id)) {
+        return { ...product, dimensions: calcDimensions.get(product.id) };
+      }
+      return product;
+    });
+    
+    if (products.length === 1 && !products[0].dimensions && calcDimensions.size > 0) {
+      const firstDimensions = calcDimensions.values().next().value;
+      if (firstDimensions) {
+        products[0] = { ...products[0], dimensions: firstDimensions };
+      }
+    }
+  }
+}
 
 // Get calculation share link if exists
 const shareLink = await getCalculationShareLink(order.calculationId);
 
-// Determine quote status based on order status
-// If order exists and is confirmed/in progress/completed - it means quote was approved
-const orderStatusToQuoteStatus: Record<string, string> = {
-  'DRAFT': 'DRAFT',
-  'CONCEPT': 'DRAFT', 
-  'PENDING': 'CLIENT_VIEWED',
-  'CONFIRMED': 'CLIENT_APPROVED',
-  'IN_PROGRESS': 'CLIENT_APPROVED',
-  'COMPLETED': 'CLIENT_APPROVED',
-  'CANCELLED': 'CLIENT_REJECTED',
-};
-const approvalStatus = orderStatusToQuoteStatus[order.status] || 'CLIENT_APPROVED';
+// Get actual approval status from calculation (not from order status)
+const calculation = order.calculationId ? await getCalculationById(order.calculationId) : null;
+const approvalStatus = calculation?.approvalStatus || 'DRAFT';
 
 // Approval status config
 const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {

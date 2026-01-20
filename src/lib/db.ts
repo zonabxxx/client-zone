@@ -538,6 +538,181 @@ export async function getQuoteProducts(orderId: string, orderName: string): Prom
   }
 }
 
+// Get product dimensions from calculation EAV data
+export async function getCalculationProductDimensions(calculationId: string | null): Promise<Map<string, ProductDimension[]>> {
+  const dimensionsMap = new Map<string, ProductDimension[]>();
+  if (!calculationId) return dimensionsMap;
+  
+  try {
+    const db = getClient();
+    
+    // Find calculation entity
+    const calcResult = await db.execute({
+      sql: `
+        SELECT e.id as entity_id
+        FROM entities e
+        JOIN attributes a ON a.entity_id = e.id
+        WHERE a.attribute_name = 'id' AND a.string_value = ?
+        LIMIT 1
+      `,
+      args: [calculationId]
+    });
+    
+    if (calcResult.rows.length === 0) return dimensionsMap;
+    
+    const entityId = calcResult.rows[0].entity_id as string;
+    
+    // Get all relevant attributes for products
+    const dataResult = await db.execute({
+      sql: `
+        SELECT attribute_name, json_value, string_value 
+        FROM attributes 
+        WHERE entity_id = ? AND (
+          attribute_name = 'calculationData' OR 
+          attribute_name = 'products' OR
+          attribute_name = 'calculationData.products'
+        )
+      `,
+      args: [entityId]
+    });
+    
+    let products: any[] = [];
+    
+    for (const row of dataResult.rows) {
+      const attrName = row.attribute_name as string;
+      const rawData = row.json_value || row.string_value;
+      
+      if (!rawData) continue;
+      
+      let parsed: any = null;
+      try {
+        parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+      } catch { continue; }
+      
+      if (attrName === 'calculationData' && parsed?.products) {
+        products = parsed.products;
+        break;
+      } else if ((attrName === 'products' || attrName === 'calculationData.products') && Array.isArray(parsed)) {
+        products = parsed;
+        break;
+      }
+    }
+    
+    for (const product of products) {
+      const customFields = product.customFieldValues || product.calculatorInputValues || {};
+      const dimensions = extractDimensionsFromInputFields(customFields);
+      
+      if (dimensions.length > 0) {
+        const productId = product.id || product.productId || 'first';
+        dimensionsMap.set(productId, dimensions);
+      }
+    }
+    
+    return dimensionsMap;
+  } catch (error) {
+    console.error('Error getting calculation product dimensions:', error);
+    return dimensionsMap;
+  }
+}
+
+// Get products with prices from calculation EAV
+export async function getCalculationProducts(calculationId: string | null): Promise<QuoteProduct[]> {
+  if (!calculationId) return [];
+  
+  try {
+    const db = getClient();
+    
+    // Find calculation entity
+    const calcResult = await db.execute({
+      sql: `
+        SELECT e.id as entity_id
+        FROM entities e
+        JOIN attributes a ON a.entity_id = e.id
+        WHERE a.attribute_name = 'id' AND a.string_value = ?
+        LIMIT 1
+      `,
+      args: [calculationId]
+    });
+    
+    if (calcResult.rows.length === 0) return [];
+    
+    const entityId = calcResult.rows[0].entity_id as string;
+    
+    // Get all relevant attributes for products and totals
+    const dataResult = await db.execute({
+      sql: `
+        SELECT attribute_name, json_value, string_value, number_value
+        FROM attributes 
+        WHERE entity_id = ? AND (
+          attribute_name = 'calculationData' OR 
+          attribute_name = 'products' OR
+          attribute_name = 'calculationData.products' OR
+          attribute_name = 'totalPrice' OR
+          attribute_name = 'actualTotalPrice'
+        )
+      `,
+      args: [entityId]
+    });
+    
+    let products: any[] = [];
+    let totalPrice: number | null = null;
+    
+    for (const row of dataResult.rows) {
+      const attrName = row.attribute_name as string;
+      const rawData = row.json_value || row.string_value;
+      const numValue = row.number_value as number | null;
+      
+      if (attrName === 'totalPrice' || attrName === 'actualTotalPrice') {
+        if (numValue != null) totalPrice = numValue;
+        continue;
+      }
+      
+      if (!rawData) continue;
+      
+      let parsed: any = null;
+      try {
+        parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+      } catch { continue; }
+      
+      if (attrName === 'calculationData' && parsed?.products) {
+        products = parsed.products;
+      } else if ((attrName === 'products' || attrName === 'calculationData.products') && Array.isArray(parsed)) {
+        products = parsed;
+      }
+    }
+    
+    // Convert to QuoteProduct format
+    const quoteProducts: QuoteProduct[] = products.map((product: any) => {
+      const customFields = product.customFieldValues || product.calculatorInputValues || {};
+      const dimensions = extractDimensionsFromInputFields(customFields);
+      
+      // Get price from product
+      const productTotalCost = product.totalCost || product.finalPrice || 0;
+      const quantity = product.quantity || product.calculatedQuantity || 1;
+      const unit = product.variant?.unit || 'm²';
+      
+      // Get product name from nested structure
+      const name = product.product?.name || product.variant?.name || 'Produkt';
+      
+      return {
+        id: product.id || product.productId || 'unknown',
+        name,
+        quantity,
+        unit,
+        unitPrice: quantity > 0 ? productTotalCost / quantity : productTotalCost,
+        totalPrice: productTotalCost,
+        services: [],
+        dimensions: dimensions.length > 0 ? dimensions : undefined,
+      };
+    });
+    
+    return quoteProducts;
+  } catch (error) {
+    console.error('Error getting calculation products:', error);
+    return [];
+  }
+}
+
 // Get calculation share link if exists
 export async function getCalculationShareLink(calculationId: string | null): Promise<string | null> {
   if (!calculationId) return null;
@@ -913,7 +1088,19 @@ export async function getCalculationById(calculationId: string): Promise<Calcula
     if (entity.rows.length === 0) return null;
     
     const entityId = entity.rows[0].entityId as string;
-    const data = await getEavEntityData(entityId);
+    
+    // Get all attributes for this entity
+    const attrsResult = await db.execute({
+      sql: `SELECT attribute_name, string_value, number_value, boolean_value, date_value, json_value 
+            FROM attributes WHERE entity_id = ?`,
+      args: [entityId]
+    });
+    
+    const data: Record<string, any> = { id: calculationId };
+    for (const row of attrsResult.rows) {
+      const name = row.attribute_name as string;
+      data[name] = row.string_value || row.number_value || row.boolean_value || row.date_value || row.json_value;
+    }
     
     // Get share token
     const shareResult = await db.execute({
@@ -992,63 +1179,7 @@ export async function getOrderByCalculationId(calculationId: string): Promise<Or
   }
 }
 
-// Get calculation products from EAV attributes
-export interface CalculationProduct {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  unitPrice: number;
-  totalPrice: number;
-}
-
-export async function getCalculationProducts(calculationId: string): Promise<CalculationProduct[]> {
-  try {
-    const db = getClient();
-    
-    // Find entity by calculation ID
-    const entity = await db.execute({
-      sql: `SELECT e.id as entityId 
-            FROM entities e 
-            JOIN attributes a ON e.id = a.entity_id 
-            WHERE e.table_id = ? 
-              AND a.attribute_name = 'id' 
-              AND a.string_value = ?
-            LIMIT 1`,
-      args: [EAV_TABLES.calculations, calculationId]
-    });
-    
-    if (entity.rows.length === 0) return [];
-    
-    const entityId = entity.rows[0].entityId as string;
-    
-    // Get products JSON attribute
-    const productsAttr = await db.execute({
-      sql: `SELECT json_value FROM attributes 
-            WHERE entity_id = ? AND attribute_name = 'products'`,
-      args: [entityId]
-    });
-    
-    if (productsAttr.rows.length === 0 || !productsAttr.rows[0].json_value) {
-      return [];
-    }
-    
-    const productsJson = productsAttr.rows[0].json_value as string;
-    const products = JSON.parse(productsJson) as any[];
-    
-    return products.map(p => ({
-      id: p.id || '',
-      name: p.name || 'Produkt',
-      quantity: Number(p.quantity) || 1,
-      unit: p.unit || 'm²',
-      unitPrice: Number(p.unitPrice) || 0,
-      totalPrice: Number(p.totalPrice) || Number(p.price) || 0,
-    }));
-  } catch (error) {
-    console.error('Error getting calculation products:', error);
-    return [];
-  }
-}
+// Old getCalculationProducts removed - using new version at line ~619
 
 // Check if client can access calculation
 export async function canClientAccessCalculation(
