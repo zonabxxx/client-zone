@@ -1317,18 +1317,47 @@ export async function getCalculationByShareToken(
     });
     
     const data: Record<string, any> = { id: calculationId };
+    // Reconstruct calculationData from flattened EAV attributes
+    const calculationDataFromEav: Record<string, any> = {};
+    
     for (const row of attrsResult.rows) {
       const name = row.attribute_name as string;
-      data[name] = row.json_value || row.string_value || row.number_value;
+      let value = row.json_value || row.string_value || row.number_value;
+      
+      // Parse JSON values if stored as strings
+      if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+        try {
+          value = JSON.parse(value);
+        } catch { /* keep as string */ }
+      }
+      
+      // Handle flattened calculationData attributes (e.g., calculationData.products)
+      if (name.startsWith('calculationData.')) {
+        const subKey = name.replace('calculationData.', '');
+        // Handle nested paths like calculationData.selectedClient.name
+        if (subKey.includes('.')) {
+          const parts = subKey.split('.');
+          let current = calculationDataFromEav;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (!current[parts[i]]) current[parts[i]] = {};
+            current = current[parts[i]];
+          }
+          current[parts[parts.length - 1]] = value;
+        } else {
+          calculationDataFromEav[subKey] = value;
+        }
+      } else if (name === 'calculationData') {
+        // Handle case where calculationData is stored as single JSON blob
+        if (typeof value === 'object') {
+          Object.assign(calculationDataFromEav, value);
+        }
+      } else {
+        data[name] = value;
+      }
     }
     
-    // Parse calculationData if it's a string
-    let calculationData = data.calculationData;
-    if (typeof calculationData === 'string') {
-      try {
-        calculationData = JSON.parse(calculationData);
-      } catch { /* ignore */ }
-    }
+    // Use reconstructed calculationData
+    let calculationData = calculationDataFromEav;
     
     // Get organization data if available
     let organization: PublicQuoteData['organization'] = null;
