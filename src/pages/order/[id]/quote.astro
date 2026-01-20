@@ -84,7 +84,7 @@ const backUrl = fromParam === 'quotes' ? '/quotes' : `/order/${id}`;
 const backLabel = fromParam === 'quotes' ? 'Späť na cenové ponuky' : 'Späť na zákazku';
 
 // Calculate totals - prices from calculation are ALREADY WITH VAT
-const vatRate = 20; // 20% DPH
+const vatRate = 23; // 23% DPH
 const totalWithVat = Math.round(products.reduce((sum, p) => sum + (p.totalPrice || 0), 0) * 100) / 100;
 const subtotal = Math.round((totalWithVat / (1 + vatRate / 100)) * 100) / 100;
 const vatAmount = Math.round((totalWithVat - subtotal) * 100) / 100;
