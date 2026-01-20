@@ -1,0 +1,452 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import { getCalculationByShareToken } from '../../../lib/db';
+import { format } from 'date-fns';
+import { sk } from 'date-fns/locale';
+
+const { id, token } = Astro.params;
+
+if (!id || !token) {
+  return Astro.redirect('/not-found');
+}
+
+// Fetch calculation by share token
+const result = await getCalculationByShareToken(id, token);
+
+if (!result) {
+  return Astro.redirect('/not-found');
+}
+
+const { calculation, share, organization } = result;
+
+// Check if expired
+const isExpired = share.expiresAt && new Date(share.expiresAt) < new Date();
+
+// Parse calculation data
+let calculationData: any = {};
+try {
+  calculationData = typeof calculation.calculationData === 'string' 
+    ? JSON.parse(calculation.calculationData) 
+    : calculation.calculationData || {};
+} catch { /* ignore */ }
+
+// Get products, services, materials
+const products = calculationData.products || [];
+const services = calculationData.services || [];
+const materials = calculationData.materials || [];
+
+// Get client info
+const clientName = calculationData.selectedClient?.name || calculation.companyName || '';
+
+// Get VAT rate
+const vatRate = organization?.vatRate ?? 20;
+
+// Calculate totals
+const computeProductTotal = (p: any): number => {
+  const stored = Number(p?.totalCost) || 0;
+  if (stored > 0) return stored;
+  const qty = Number(p?.quantity) || 1;
+  const base = Number(p?.variant?.salePrice || p?.variant?.basePrice) || 0;
+  return base * qty;
+};
+
+const productTotal = products.reduce((sum: number, p: any) => sum + computeProductTotal(p), 0);
+const serviceTotal = services.reduce((sum: number, s: any) => sum + (Number(s.calculatedCost) || 0), 0);
+const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalCost) || 0), 0);
+
+const totalAmount = Number(calculation.totalPrice) || Number(calculationData.actualTotalPrice) || (productTotal + serviceTotal + materialTotal);
+const vatAmount = totalAmount * (vatRate / 100);
+const totalWithVat = totalAmount + vatAmount;
+
+// Delivery days
+const deliveryDays = calculationData.overallDeliveryDays ?? null;
+
+// Format functions
+function formatCurrency(n: number): string {
+  return new Intl.NumberFormat('sk-SK', { style: 'currency', currency: 'EUR' }).format(n || 0);
+}
+
+function formatDate(date: Date | string | null): string {
+  if (!date) return '—';
+  try {
+    const d = new Date(date);
+    return format(d, 'd. MMMM yyyy', { locale: sk });
+  } catch {
+    return '—';
+  }
+}
+
+// Approval status config
+const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
+  'DRAFT': { label: 'V príprave', color: 'text-slate-400', bgColor: 'bg-slate-500/20', icon: '📝' },
+  'CLIENT_VIEWED': { label: 'Čaká na schválenie', color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: '⏳' },
+  'CLIENT_APPROVED': { label: 'Schválené', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20', icon: '✅' },
+  'CLIENT_REJECTED': { label: 'Zamietnuté', color: 'text-red-400', bgColor: 'bg-red-500/20', icon: '❌' },
+  'CLIENT_REQUESTED_CHANGES': { label: 'Požadované zmeny', color: 'text-orange-400', bgColor: 'bg-orange-500/20', icon: '✏️' },
+};
+
+// Check for responded query param (just submitted)
+const respondedAction = Astro.url.searchParams.get('responded');
+const justResponded = !!respondedAction;
+
+const approvalStatus = calculation.approvalStatus || 'DRAFT';
+const currentStatus = statusConfig[approvalStatus] || statusConfig['DRAFT'];
+const isApproved = approvalStatus === 'CLIENT_APPROVED' || respondedAction === 'approved';
+const isRejected = approvalStatus === 'CLIENT_REJECTED' || respondedAction === 'rejected';
+const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respondedAction === 'requested_changes';
+---
+
+<Layout title={`Cenová ponuka - ${calculation.name}`}>
+  <main class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div class="max-w-2xl mx-auto px-5 py-10">
+      
+      {/* Header */}
+      <div class="text-center mb-6">
+        {organization && (
+          <div class="text-sm text-slate-400 mb-2">{organization.name}</div>
+        )}
+        <h1 class="text-3xl font-bold text-white mb-2">{calculation.name}</h1>
+        {clientName && (
+          <p class="text-slate-400">
+            Vážený/á <span class="font-medium text-white">{clientName}</span>,<br />
+            pripravili sme pre Vás ponuku
+          </p>
+        )}
+        
+        {/* Status badge */}
+        <div class="mt-4 flex justify-center">
+          <span class={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${currentStatus.bgColor} ${currentStatus.color}`}>
+            <span>{currentStatus.icon}</span>
+            {currentStatus.label}
+          </span>
+        </div>
+      </div>
+
+      {/* Expired State */}
+      {isExpired && (
+        <div class="glass rounded-3xl p-8 text-center mb-6 animate-fade-in-up">
+          <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-white mb-2">Ponuka expirovala</h3>
+          <p class="text-slate-400">Kontaktujte nás pre aktuálnu ponuku.</p>
+        </div>
+      )}
+
+      {!isExpired && (
+        <>
+          {/* Quick Summary */}
+          <button 
+            id="toggleDetailsBtn"
+            class="w-full flex items-center justify-between py-4 px-5 glass rounded-2xl hover:bg-white/5 transition-all mb-4 animate-fade-in-up"
+          >
+            <div class="flex items-center gap-4">
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                  <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
+                    <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" clip-rule="evenodd" />
+                  </svg>
+                </span>
+                <div class="text-left">
+                  <div class="font-semibold text-white">{products.length} {products.length === 1 ? 'produkt' : 'produkty'}</div>
+                  <div class="text-xs text-slate-400">
+                    {products.slice(0, 2).map((p: any) => p.product?.name || 'Produkt').join(', ')}
+                    {products.length > 2 && '...'}
+                  </div>
+                </div>
+              </div>
+              
+              {services.length > 0 && (
+                <>
+                  <div class="w-px h-10 bg-slate-700"></div>
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                      <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </span>
+                    <div class="text-left">
+                      <div class="font-semibold text-white">{services.length} {services.length === 1 ? 'služba' : 'služby'}</div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            
+            <div class="flex items-center gap-2 text-emerald-400">
+              <span class="text-sm font-medium">Detaily</span>
+              <svg id="chevronIcon" class="w-5 h-5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+
+          {/* Details Panel (hidden by default) */}
+          <div id="detailsPanel" class="hidden mb-4 glass rounded-2xl overflow-hidden animate-fade-in-up stagger-1">
+            {/* Products */}
+            {products.length > 0 && (
+              <div class="p-5 border-b border-slate-700/50">
+                <h4 class="font-semibold text-white mb-3 flex items-center gap-2">
+                  <span class="w-6 h-6 bg-emerald-500/20 rounded-md flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
+                      <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clip-rule="evenodd" />
+                    </svg>
+                  </span>
+                  Produkty
+                </h4>
+                <div class="space-y-2">
+                  {products.map((p: any, idx: number) => (
+                    <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
+                      <span class="text-slate-300 font-medium">
+                        {p.product?.name || 'Produkt'}
+                        <span class="text-slate-500 font-normal ml-2">× {Number(p.quantity) || 1} ks</span>
+                      </span>
+                      <span class="font-semibold text-white">{formatCurrency(computeProductTotal(p))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Services */}
+            {services.length > 0 && (
+              <div class="p-5 border-b border-slate-700/50">
+                <h4 class="font-semibold text-white mb-3 flex items-center gap-2">
+                  <span class="w-6 h-6 bg-blue-500/20 rounded-md flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </span>
+                  Služby
+                </h4>
+                <div class="space-y-2">
+                  {services.map((s: any, idx: number) => (
+                    <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
+                      <span class="text-slate-300 font-medium">{s.serviceName || s.service?.name || s.name || 'Služba'}</span>
+                      <span class="font-semibold text-white">{formatCurrency(Number(s.calculatedCost) || 0)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Summary */}
+            <div class="p-5 bg-slate-800/30">
+              <div class="space-y-2">
+                <div class="flex justify-between py-1">
+                  <span class="text-slate-400">Medzisúčet bez DPH</span>
+                  <span class="text-white">{formatCurrency(totalAmount)}</span>
+                </div>
+                <div class="flex justify-between py-1">
+                  <span class="text-slate-400">DPH {vatRate}%</span>
+                  <span class="text-white">{formatCurrency(vatAmount)}</span>
+                </div>
+                <div class="flex justify-between py-2 mt-2 border-t border-slate-700">
+                  <span class="font-bold text-white text-lg">Celkom s DPH</span>
+                  <span class="font-bold text-emerald-400 text-lg">{formatCurrency(totalWithVat)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Price Card */}
+          <div class="glass rounded-3xl overflow-hidden animate-fade-in-up stagger-2">
+            
+            {/* Delivery info */}
+            {deliveryDays !== null && (
+              <div class="px-6 py-3 border-b border-slate-700/50 flex items-center justify-center gap-2 text-sm text-slate-400 bg-slate-800/30">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span>Dodanie do <strong class="text-white">{deliveryDays} pracovných dní</strong></span>
+              </div>
+            )}
+
+            {/* Price Section */}
+            <div class="p-8 bg-gradient-to-br from-emerald-500/10 to-blue-500/10">
+              <div class="text-center">
+                <div class="text-sm text-slate-400 mb-1">Vaša cena</div>
+                <div class="text-5xl font-bold text-white mb-1">
+                  {formatCurrency(totalWithVat)}
+                </div>
+                <div class="text-sm text-slate-400">
+                  vrátane DPH {vatRate}%
+                </div>
+              </div>
+            </div>
+
+            {/* Validity */}
+            {share.expiresAt && (
+              <div class="px-6 py-3 bg-amber-500/10 border-t border-amber-500/30 text-center">
+                <span class="text-amber-400 text-sm">
+                  ⏰ Ponuka platí do <strong>{formatDate(share.expiresAt)}</strong>
+                </span>
+              </div>
+            )}
+
+            {/* Just Responded Message */}
+            {justResponded && (
+              <div class="p-8 text-center">
+                <div class={`w-16 h-16 ${respondedAction === 'approved' ? 'bg-emerald-500/20' : respondedAction === 'rejected' ? 'bg-red-500/20' : 'bg-amber-500/20'} rounded-full flex items-center justify-center mx-auto mb-4`}>
+                  {respondedAction === 'approved' && (
+                    <svg class="w-8 h-8 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                  )}
+                  {respondedAction === 'rejected' && (
+                    <svg class="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                  {respondedAction === 'requested_changes' && (
+                    <svg class="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  )}
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">
+                  {respondedAction === 'approved' && 'Ďakujeme za schválenie!'}
+                  {respondedAction === 'rejected' && 'Odpoveď zaznamenaná'}
+                  {respondedAction === 'requested_changes' && 'Vaša otázka bola odoslaná'}
+                </h3>
+                <p class="text-slate-400">
+                  {respondedAction === 'approved' && 'Budeme Vás čoskoro kontaktovať ohľadom ďalších krokov.'}
+                  {respondedAction === 'rejected' && 'Ďakujeme za odpoveď. Ak zmeníte názor, neváhajte nás kontaktovať.'}
+                  {respondedAction === 'requested_changes' && 'Budeme Vás čoskoro kontaktovať s odpoveďou.'}
+                </p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            {!isApproved && !justResponded && (
+              <div class="p-6 space-y-4">
+                <form id="quoteForm" method="POST" action={`/api/quote/${id}/${token}/respond`}>
+                  <input type="hidden" name="action" id="actionInput" value="approved" />
+                  <input type="hidden" name="comment" id="commentInput" value="" />
+                  
+                  <button
+                    type="submit"
+                    id="approveBtn"
+                    class="w-full py-5 rounded-2xl text-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-200 flex items-center justify-center gap-3"
+                  >
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    Súhlasím s ponukou
+                  </button>
+                </form>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <button
+                    id="changesBtn"
+                    class="py-3 rounded-xl text-sm font-medium text-slate-300 bg-slate-700/50 hover:bg-slate-700 transition-colors"
+                  >
+                    Mám otázku
+                  </button>
+                  <button
+                    id="rejectBtn"
+                    class="py-3 rounded-xl text-sm font-medium text-slate-400 bg-slate-800/50 hover:bg-slate-800 transition-colors"
+                  >
+                    Nemám záujem
+                  </button>
+                </div>
+
+                {/* Comment field */}
+                <div id="commentSection" class="hidden">
+                  <textarea
+                    id="commentTextarea"
+                    rows="3"
+                    class="w-full border border-slate-600 bg-slate-800/50 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    placeholder="Napíšte nám vašu otázku alebo poznámku..."
+                  ></textarea>
+                </div>
+              </div>
+            )}
+
+            {/* Approved State */}
+            {isApproved && (
+              <div class="p-8 text-center">
+                <div class="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg class="w-8 h-8 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">Ponuka schválená</h3>
+                <p class="text-slate-400">Ďakujeme za dôveru. Vaša zákazka je v realizácii.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Company Footer */}
+          {organization && (
+            <div class="mt-8 text-center text-sm text-slate-500">
+              <div class="font-medium text-slate-400">{organization.name}</div>
+              {organization.address && <div>{organization.address}</div>}
+              <div class="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-1">
+                {organization.ico && <span>IČO: {organization.ico}</span>}
+                {organization.email && <span>{organization.email}</span>}
+                {organization.phone && <span>{organization.phone}</span>}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  </main>
+</Layout>
+
+<script>
+  // Toggle details panel
+  const toggleBtn = document.getElementById('toggleDetailsBtn');
+  const detailsPanel = document.getElementById('detailsPanel');
+  const chevronIcon = document.getElementById('chevronIcon');
+  
+  if (toggleBtn && detailsPanel && chevronIcon) {
+    toggleBtn.addEventListener('click', () => {
+      detailsPanel.classList.toggle('hidden');
+      chevronIcon.classList.toggle('rotate-180');
+    });
+  }
+  
+  // Quote action buttons
+  const quoteForm = document.getElementById('quoteForm') as HTMLFormElement;
+  const actionInput = document.getElementById('actionInput') as HTMLInputElement;
+  const commentInput = document.getElementById('commentInput') as HTMLInputElement;
+  const commentSection = document.getElementById('commentSection');
+  const commentTextarea = document.getElementById('commentTextarea') as HTMLTextAreaElement;
+  const changesBtn = document.getElementById('changesBtn');
+  const rejectBtn = document.getElementById('rejectBtn');
+  const approveBtn = document.getElementById('approveBtn');
+  
+  if (changesBtn && quoteForm && actionInput && commentSection) {
+    changesBtn.addEventListener('click', () => {
+      commentSection.classList.remove('hidden');
+      actionInput.value = 'requested_changes';
+      if (approveBtn) {
+        approveBtn.textContent = 'Odoslať otázku';
+        approveBtn.classList.remove('from-emerald-500', 'to-emerald-600', 'hover:from-emerald-600', 'hover:to-emerald-700');
+        approveBtn.classList.add('from-amber-500', 'to-amber-600', 'hover:from-amber-600', 'hover:to-amber-700');
+      }
+    });
+  }
+  
+  if (rejectBtn && quoteForm && actionInput) {
+    rejectBtn.addEventListener('click', () => {
+      actionInput.value = 'rejected';
+      quoteForm.submit();
+    });
+  }
+  
+  // Sync comment textarea to hidden input before submit
+  if (quoteForm && commentTextarea && commentInput) {
+    quoteForm.addEventListener('submit', () => {
+      commentInput.value = commentTextarea.value;
+    });
+  }
+</script>

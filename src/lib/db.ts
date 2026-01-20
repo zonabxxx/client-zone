@@ -1223,6 +1223,216 @@ export async function canClientAccessCalculation(
   }
 }
 
+// Get calculation by share token (public quote page)
+export interface PublicQuoteData {
+  calculation: {
+    id: string;
+    name: string;
+    description: string | null;
+    approvalStatus: string;
+    calculationData: any;
+    totalPrice: number | null;
+    companyName: string | null;
+  };
+  share: {
+    token: string;
+    expiresAt: Date | null;
+    status: string;
+    clientResponse: string | null;
+  };
+  organization: {
+    name: string;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    ico: string | null;
+    dic: string | null;
+    icDph: string | null;
+    vatRate: number | null;
+  } | null;
+}
+
+export async function getCalculationByShareToken(
+  calculationId: string, 
+  token: string
+): Promise<PublicQuoteData | null> {
+  try {
+    const db = getClient();
+    
+    // Verify share token is valid
+    const shareResult = await db.execute({
+      sql: `SELECT token, expires_at, status, client_response, organization_id
+            FROM calculation_shares 
+            WHERE calculation_id = ? AND token = ?
+            LIMIT 1`,
+      args: [calculationId, token]
+    });
+    
+    if (shareResult.rows.length === 0) return null;
+    
+    const shareRow = shareResult.rows[0];
+    const organizationId = shareRow.organization_id as string | null;
+    
+    // Get calculation entity data
+    const entityResult = await db.execute({
+      sql: `SELECT e.id as entityId 
+            FROM entities e 
+            JOIN attributes a ON e.id = a.entity_id 
+            WHERE e.table_id = ? 
+              AND a.attribute_name = 'id' 
+              AND a.string_value = ?
+            LIMIT 1`,
+      args: [EAV_TABLES.calculations, calculationId]
+    });
+    
+    if (entityResult.rows.length === 0) return null;
+    
+    const entityId = entityResult.rows[0].entityId as string;
+    
+    // Get all calculation attributes
+    const attrsResult = await db.execute({
+      sql: `SELECT attribute_name, string_value, number_value, json_value 
+            FROM attributes WHERE entity_id = ?`,
+      args: [entityId]
+    });
+    
+    const data: Record<string, any> = { id: calculationId };
+    for (const row of attrsResult.rows) {
+      const name = row.attribute_name as string;
+      data[name] = row.json_value || row.string_value || row.number_value;
+    }
+    
+    // Parse calculationData if it's a string
+    let calculationData = data.calculationData;
+    if (typeof calculationData === 'string') {
+      try {
+        calculationData = JSON.parse(calculationData);
+      } catch { /* ignore */ }
+    }
+    
+    // Get organization data if available
+    let organization: PublicQuoteData['organization'] = null;
+    if (organizationId) {
+      const orgResult = await db.execute({
+        sql: `SELECT name, email, phone, address, ico, dic, ic_dph as icDph, vat_rate as vatRate
+              FROM organizations WHERE id = ? LIMIT 1`,
+        args: [organizationId]
+      });
+      
+      if (orgResult.rows.length > 0) {
+        const orgRow = orgResult.rows[0];
+        organization = {
+          name: orgRow.name as string,
+          email: orgRow.email as string | null,
+          phone: orgRow.phone as string | null,
+          address: orgRow.address as string | null,
+          ico: orgRow.ico as string | null,
+          dic: orgRow.dic as string | null,
+          icDph: orgRow.icDph as string | null,
+          vatRate: orgRow.vatRate as number | null,
+        };
+      }
+    }
+    
+    return {
+      calculation: {
+        id: calculationId,
+        name: data.name || 'Cenová ponuka',
+        description: data.description || null,
+        approvalStatus: data.approvalStatus || 'DRAFT',
+        calculationData: calculationData || {},
+        totalPrice: Number(data.actualTotalPrice || data.totalPrice) || null,
+        companyName: data.companyName || calculationData?.selectedClient?.name || null,
+      },
+      share: {
+        token: shareRow.token as string,
+        expiresAt: shareRow.expires_at ? new Date((shareRow.expires_at as number) * 1000) : null,
+        status: shareRow.status as string,
+        clientResponse: shareRow.client_response as string | null,
+      },
+      organization,
+    };
+  } catch (error) {
+    console.error('Error getting calculation by share token:', error);
+    return null;
+  }
+}
+
+// Update quote response (approve/reject/request changes)
+export async function updateQuoteResponse(
+  calculationId: string,
+  token: string,
+  action: 'approved' | 'rejected' | 'requested_changes',
+  comment?: string
+): Promise<boolean> {
+  try {
+    const db = getClient();
+    
+    // Verify token is valid first
+    const shareResult = await db.execute({
+      sql: `SELECT id, expires_at FROM calculation_shares 
+            WHERE calculation_id = ? AND token = ? AND status = 'active'
+            LIMIT 1`,
+      args: [calculationId, token]
+    });
+    
+    if (shareResult.rows.length === 0) return false;
+    
+    const shareRow = shareResult.rows[0];
+    const expiresAt = shareRow.expires_at as number;
+    
+    // Check if expired
+    if (expiresAt && expiresAt < Math.floor(Date.now() / 1000)) {
+      return false;
+    }
+    
+    // Map action to approval status
+    const approvalStatusMap: Record<string, string> = {
+      'approved': 'CLIENT_APPROVED',
+      'rejected': 'CLIENT_REJECTED',
+      'requested_changes': 'CLIENT_REQUESTED_CHANGES',
+    };
+    
+    const newApprovalStatus = approvalStatusMap[action];
+    
+    // Update share with response
+    await db.execute({
+      sql: `UPDATE calculation_shares 
+            SET client_response = ?, responded_at = ?, status = ?
+            WHERE calculation_id = ? AND token = ?`,
+      args: [action, Math.floor(Date.now() / 1000), action === 'approved' ? 'responded' : 'active', calculationId, token]
+    });
+    
+    // Update calculation approval status via EAV
+    const entityResult = await db.execute({
+      sql: `SELECT e.id as entityId 
+            FROM entities e 
+            JOIN attributes a ON e.id = a.entity_id 
+            WHERE e.table_id = ? 
+              AND a.attribute_name = 'id' 
+              AND a.string_value = ?
+            LIMIT 1`,
+      args: [EAV_TABLES.calculations, calculationId]
+    });
+    
+    if (entityResult.rows.length > 0) {
+      const entityId = entityResult.rows[0].entityId as string;
+      
+      // Update or insert approvalStatus attribute
+      await db.execute({
+        sql: `INSERT OR REPLACE INTO attributes (entity_id, attribute_name, string_value, updated_at)
+              VALUES (?, 'approvalStatus', ?, ?)`,
+        args: [entityId, newApprovalStatus, Math.floor(Date.now() / 1000)]
+      });
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error updating quote response:', error);
+    return false;
+  }
+}
+
 // Check if database is configured
 export function isDatabaseConfigured(): boolean {
   return !!DB_URL;

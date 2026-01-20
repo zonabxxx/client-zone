@@ -89,39 +89,41 @@ function formatDate(date: Date | null): string {
   <main class="min-h-screen">
     <DashboardHeader customerName={session.customerName} />
     
-    <div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
       <Navigation active="quotes" />
       
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div class="glass rounded-2xl p-6 animate-fade-in-up">
-          <div class="text-3xl font-bold text-white mb-1">{stats.total}</div>
-          <div class="text-slate-400 text-sm">Celkom ponúk</div>
+      <!-- Mobile: 2x2 grid, Desktop: 4 columns -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
+        <div class="glass rounded-xl sm:rounded-2xl p-3 sm:p-6 animate-fade-in-up">
+          <div class="text-2xl sm:text-3xl font-bold text-white mb-0.5 sm:mb-1">{stats.total}</div>
+          <div class="text-slate-400 text-xs sm:text-sm">Ponúk</div>
         </div>
-        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-1">
-          <div class="text-3xl font-bold text-blue-400 mb-1">{stats.projects}</div>
-          <div class="text-slate-400 text-sm">Projektov</div>
+        <div class="glass rounded-xl sm:rounded-2xl p-3 sm:p-6 animate-fade-in-up stagger-1">
+          <div class="text-2xl sm:text-3xl font-bold text-blue-400 mb-0.5 sm:mb-1">{stats.projects}</div>
+          <div class="text-slate-400 text-xs sm:text-sm">Projektov</div>
         </div>
-        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-2 border border-emerald-500/30 bg-emerald-500/5">
-          <div class="text-3xl font-bold text-emerald-400 mb-1">{stats.approved}</div>
-          <div class="text-slate-400 text-sm">Schválených</div>
+        <div class="glass rounded-xl sm:rounded-2xl p-3 sm:p-6 animate-fade-in-up stagger-2 border border-emerald-500/30 bg-emerald-500/5">
+          <div class="text-2xl sm:text-3xl font-bold text-emerald-400 mb-0.5 sm:mb-1">{stats.approved}</div>
+          <div class="text-slate-400 text-xs sm:text-sm">Schválených</div>
         </div>
-        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-3">
-          <div class="text-3xl font-bold text-amber-400 mb-1">{stats.pending}</div>
-          <div class="text-slate-400 text-sm">Čaká na vás</div>
+        <div class="glass rounded-xl sm:rounded-2xl p-3 sm:p-6 animate-fade-in-up stagger-3">
+          <div class="text-2xl sm:text-3xl font-bold text-amber-400 mb-0.5 sm:mb-1">{stats.pending}</div>
+          <div class="text-slate-400 text-xs sm:text-sm">Čaká</div>
         </div>
       </div>
 
-      <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
-        <button data-filter="all" class="filter-btn active px-4 py-2 rounded-xl text-sm font-medium transition-all">
+      <!-- Filter buttons - scrollable on mobile -->
+      <div class="flex gap-1.5 sm:gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2 -mx-3 px-3 sm:mx-0 sm:px-0">
+        <button data-filter="all" class="filter-btn active px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap">
           Všetky
         </button>
-        <button data-filter="pending" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all">
+        <button data-filter="pending" class="filter-btn px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap">
           Na schválenie
         </button>
-        <button data-filter="approved" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all">
+        <button data-filter="approved" class="filter-btn px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap">
           Schválené
         </button>
-        <button data-filter="draft" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all">
+        <button data-filter="draft" class="filter-btn px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap">
           V príprave
         </button>
       </div>
@@ -133,7 +135,7 @@ function formatDate(date: Date | null): string {
           <p class="text-slate-400">Vaše cenové ponuky sa tu zobrazia hneď ako budú vytvorené.</p>
         </div>
       ) : (
-        <div class="space-y-6" id="calculationsContainer">
+        <div class="space-y-3 sm:space-y-6" id="calculationsContainer">
           {/* Projects with calculations */}
           {groupedProjects.map((group, projectIndex) => {
             const projectApproved = group.calculations.filter(c => c.approvalStatus === 'CLIENT_APPROVED').length;
@@ -142,40 +144,40 @@ function formatDate(date: Date | null): string {
             
             return (
               <details 
-                class={`project-group rounded-2xl overflow-hidden animate-fade-in-up ${allApproved ? 'border-2 border-emerald-500/50 bg-emerald-500/10' : 'glass'}`}
+                class={`project-group rounded-xl sm:rounded-2xl overflow-hidden animate-fade-in-up ${allApproved ? 'border-2 border-emerald-500/50 bg-emerald-500/10' : 'glass'}`}
                 style={`animation-delay: ${projectIndex * 50}ms`}
                 open
               >
-                <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-white/5 transition-colors">
-                  <div class="flex items-center gap-4">
-                    <span class="text-2xl">📁</span>
-                    <div>
-                      <h3 class="text-lg font-semibold text-white">{group.project.name}</h3>
-                      <div class="flex items-center gap-3 text-sm text-slate-400">
+                <summary class="flex items-center justify-between p-3 sm:p-5 cursor-pointer hover:bg-white/5 transition-colors">
+                  <div class="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+                    <span class="text-xl sm:text-2xl flex-shrink-0">📁</span>
+                    <div class="min-w-0 flex-1">
+                      <h3 class="text-sm sm:text-lg font-semibold text-white truncate">{group.project.name}</h3>
+                      <div class="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-400 flex-wrap">
                         <span>{projectTotal} {projectTotal === 1 ? 'ponuka' : projectTotal < 5 ? 'ponuky' : 'ponúk'}</span>
                         {projectApproved > 0 && (
                           <span class="flex items-center gap-1 text-emerald-400">
-                            <span>✅</span> {projectApproved} schválených
+                            <span>✅</span> <span class="hidden sm:inline">{projectApproved} schválených</span><span class="sm:hidden">{projectApproved}</span>
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div class="flex items-center gap-4">
+                  <div class="flex items-center gap-2 sm:gap-4 flex-shrink-0">
                     <div class="text-right">
-                      <div class="text-lg font-bold text-emerald-400">
-                        {group.project.totalPrice?.toLocaleString('sk-SK', { minimumFractionDigits: 2 }) || '0,00'} €
+                      <div class="text-sm sm:text-lg font-bold text-emerald-400">
+                        {group.project.totalPrice?.toLocaleString('sk-SK', { minimumFractionDigits: 0 }) || '0'} €
                       </div>
-                      <div class="text-xs text-slate-400">Celkom</div>
+                      <div class="text-[10px] sm:text-xs text-slate-400 hidden sm:block">Celkom</div>
                     </div>
-                    <svg class="w-5 h-5 text-slate-400 transition-transform project-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 transition-transform project-chevron flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                   </div>
                 </summary>
                 
                 <div class="border-t border-white/10 bg-black/20">
-                  <div class="p-4 space-y-3">
+                  <div class="p-2 sm:p-4 space-y-2 sm:space-y-3">
                     {group.calculations.map((calc) => {
                       const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
                       const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
@@ -184,40 +186,39 @@ function formatDate(date: Date | null): string {
                       return (
                         <a 
                           href={quoteUrl || '#'}
-                          class={`calculation-card block rounded-xl p-4 transition-all cursor-pointer ${quoteUrl ? '' : 'pointer-events-none'} ${isApproved ? 'bg-emerald-500/15 hover:bg-emerald-500/25' : 'bg-white/5 hover:bg-white/10'}`}
+                          class={`calculation-card block rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all cursor-pointer ${quoteUrl ? '' : 'pointer-events-none opacity-60'} ${isApproved ? 'bg-emerald-500/15 hover:bg-emerald-500/25' : 'bg-white/5 hover:bg-white/10'}`}
                           data-status={calc.approvalStatus}
                         >
-                          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                            <div class="flex-1">
-                              <div class="flex items-center gap-2 mb-1">
-                                <span class="text-lg">{isApproved ? '✅' : '💰'}</span>
-                                <span class="font-mono text-xs text-blue-400">{calc.calculationNumber}</span>
+                          <div class="flex items-center justify-between gap-2">
+                            <div class="flex-1 min-w-0">
+                              <div class="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                                <span class="text-base sm:text-lg">{isApproved ? '✅' : '💰'}</span>
                                 {isApproved ? (
-                                  <span class="px-2 py-0.5 bg-emerald-500 text-white text-xs font-bold rounded-full">
+                                  <span class="px-1.5 sm:px-2 py-0.5 bg-emerald-500 text-white text-[10px] sm:text-xs font-bold rounded-full">
                                     SCHVÁLENÉ
                                   </span>
                                 ) : (
-                                  <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color} ${status.bgColor}`}>
+                                  <span class={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${status.color} ${status.bgColor}`}>
                                     {status.label}
                                   </span>
                                 )}
                               </div>
-                              <h4 class={`font-medium ${isApproved ? 'text-emerald-100' : 'text-white'}`}>{calc.name}</h4>
-                              <div class="text-xs text-slate-400 mt-1">📅 {formatDate(calc.updatedAt)}</div>
+                              <h4 class={`text-sm sm:text-base font-medium truncate ${isApproved ? 'text-emerald-100' : 'text-white'}`}>{calc.name}</h4>
+                              <div class="text-[10px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1">📅 {formatDate(calc.updatedAt)}</div>
                             </div>
                             
-                            <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                               {calc.totalPrice && calc.totalPrice > 0 && (
-                                <div class={`text-lg font-bold ${isApproved ? 'text-emerald-300' : 'text-emerald-400'}`}>
-                                  {calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+                                <div class={`text-sm sm:text-lg font-bold ${isApproved ? 'text-emerald-300' : 'text-emerald-400'}`}>
+                                  {calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 0 })} €
                                 </div>
                               )}
                               {quoteUrl ? (
-                                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                 </svg>
                               ) : (
-                                <span class="text-xs text-slate-500">⏳</span>
+                                <span class="text-[10px] sm:text-xs text-slate-500">⏳</span>
                               )}
                             </div>
                           </div>
@@ -233,24 +234,24 @@ function formatDate(date: Date | null): string {
           {/* Unassigned calculations */}
           {unassignedCalcs.length > 0 && (
             <details 
-              class="project-group glass rounded-2xl overflow-hidden animate-fade-in-up"
+              class="project-group glass rounded-xl sm:rounded-2xl overflow-hidden animate-fade-in-up"
               open
             >
-              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-white/5 transition-colors">
-                <div class="flex items-center gap-4">
-                  <span class="text-2xl">📋</span>
+              <summary class="flex items-center justify-between p-3 sm:p-5 cursor-pointer hover:bg-white/5 transition-colors">
+                <div class="flex items-center gap-2 sm:gap-4">
+                  <span class="text-xl sm:text-2xl">📋</span>
                   <div>
-                    <h3 class="text-lg font-semibold text-white">Nezaradené ponuky</h3>
-                    <div class="text-sm text-slate-400">{unassignedCalcs.length} ponúk bez projektu</div>
+                    <h3 class="text-sm sm:text-lg font-semibold text-white">Nezaradené ponuky</h3>
+                    <div class="text-xs sm:text-sm text-slate-400">{unassignedCalcs.length} ponúk bez projektu</div>
                   </div>
                 </div>
-                <svg class="w-5 h-5 text-slate-400 transition-transform project-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 transition-transform project-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </summary>
               
               <div class="border-t border-white/10 bg-black/20">
-                <div class="p-4 space-y-3">
+                <div class="p-2 sm:p-4 space-y-2 sm:space-y-3">
                   {unassignedCalcs.map((calc) => {
                     const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
                     const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
@@ -259,40 +260,39 @@ function formatDate(date: Date | null): string {
                     return (
                       <a 
                         href={quoteUrl || '#'}
-                        class={`calculation-card block rounded-xl p-4 transition-all cursor-pointer ${quoteUrl ? '' : 'pointer-events-none'} ${isApproved ? 'bg-emerald-500/15 hover:bg-emerald-500/25' : 'bg-white/5 hover:bg-white/10'}`}
+                        class={`calculation-card block rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all cursor-pointer ${quoteUrl ? '' : 'pointer-events-none opacity-60'} ${isApproved ? 'bg-emerald-500/15 hover:bg-emerald-500/25' : 'bg-white/5 hover:bg-white/10'}`}
                         data-status={calc.approvalStatus}
                       >
-                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                          <div class="flex-1">
-                            <div class="flex items-center gap-2 mb-1">
-                              <span class="text-lg">{isApproved ? '✅' : '💰'}</span>
-                              <span class="font-mono text-xs text-blue-400">{calc.calculationNumber}</span>
+                        <div class="flex items-center justify-between gap-2">
+                          <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                              <span class="text-base sm:text-lg">{isApproved ? '✅' : '💰'}</span>
                               {isApproved ? (
-                                <span class="px-2 py-0.5 bg-emerald-500 text-white text-xs font-bold rounded-full">
+                                <span class="px-1.5 sm:px-2 py-0.5 bg-emerald-500 text-white text-[10px] sm:text-xs font-bold rounded-full">
                                   SCHVÁLENÉ
                                 </span>
                               ) : (
-                                <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color} ${status.bgColor}`}>
+                                <span class={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${status.color} ${status.bgColor}`}>
                                   {status.label}
                                 </span>
                               )}
                             </div>
-                            <h4 class={`font-medium ${isApproved ? 'text-emerald-100' : 'text-white'}`}>{calc.name}</h4>
-                            <div class="text-xs text-slate-400 mt-1">📅 {formatDate(calc.updatedAt)}</div>
+                            <h4 class={`text-sm sm:text-base font-medium truncate ${isApproved ? 'text-emerald-100' : 'text-white'}`}>{calc.name}</h4>
+                            <div class="text-[10px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1">📅 {formatDate(calc.updatedAt)}</div>
                           </div>
                           
-                          <div class="flex items-center gap-3">
+                          <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                             {calc.totalPrice && calc.totalPrice > 0 && (
-                              <div class={`text-lg font-bold ${isApproved ? 'text-emerald-300' : 'text-emerald-400'}`}>
-                                {calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+                              <div class={`text-sm sm:text-lg font-bold ${isApproved ? 'text-emerald-300' : 'text-emerald-400'}`}>
+                                {calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 0 })} €
                               </div>
                             )}
                             {quoteUrl ? (
-                              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                               </svg>
                             ) : (
-                              <span class="text-xs text-slate-500">⏳</span>
+                              <span class="text-[10px] sm:text-xs text-slate-500">⏳</span>
                             )}
                           </div>
                         </div>
