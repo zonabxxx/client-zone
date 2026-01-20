@@ -686,13 +686,33 @@ export async function getCalculationProducts(calculationId: string | null): Prom
       const customFields = product.customFieldValues || product.calculatorInputValues || {};
       const dimensions = extractDimensionsFromInputFields(customFields);
       
-      // Get price from product
-      const productTotalCost = product.totalCost || product.finalPrice || 0;
+      // Get price from product - check multiple possible fields
+      const productTotalCost = product.totalCost || product.finalPrice || product.price || product.salePrice || 0;
       const quantity = product.quantity || product.calculatedQuantity || 1;
-      const unit = product.variant?.unit || 'm²';
+      const unit = product.variant?.unit || product.unit || 'ks';
       
-      // Get product name from nested structure
-      const name = product.product?.name || product.variant?.name || 'Produkt';
+      // Build product name from category + variant name (like main app shows)
+      // Format: "Leták - Plagát Vitajte" or just variant name if no category
+      const categoryName = product.product?.name || 
+                           product.product?.categoryName || 
+                           product.categoryName || 
+                           '';
+      const variantName = product.variant?.name || 
+                          product.variant?.variantName ||
+                          product.variantName ||
+                          product.name ||
+                          product.templateName ||
+                          '';
+      
+      // Combine category and variant name, or use just one if available
+      let name = 'Produkt';
+      if (categoryName && variantName && categoryName !== variantName) {
+        name = `${categoryName} - ${variantName}`;
+      } else if (variantName) {
+        name = variantName;
+      } else if (categoryName) {
+        name = categoryName;
+      }
       
       return {
         id: product.id || product.productId || 'unknown',
