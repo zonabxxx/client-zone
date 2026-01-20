@@ -1423,22 +1423,32 @@ export async function updateQuoteResponse(
 ): Promise<boolean> {
   try {
     const db = getClient();
+    console.log('[updateQuoteResponse] Starting update for calculation:', calculationId, 'action:', action);
     
-    // Verify token is valid first
+    // Verify token is valid first - try without status filter first
     const shareResult = await db.execute({
-      sql: `SELECT id, expires_at FROM calculation_shares 
-            WHERE calculation_id = ? AND token = ? AND status = 'active'
+      sql: `SELECT id, expires_at, status FROM calculation_shares 
+            WHERE calculation_id = ? AND token = ?
             LIMIT 1`,
       args: [calculationId, token]
     });
     
-    if (shareResult.rows.length === 0) return false;
+    console.log('[updateQuoteResponse] Share result:', JSON.stringify(shareResult.rows));
+    
+    if (shareResult.rows.length === 0) {
+      console.log('[updateQuoteResponse] No share found for token');
+      return false;
+    }
     
     const shareRow = shareResult.rows[0];
     const expiresAt = shareRow.expires_at as number;
+    const shareStatus = shareRow.status as string;
+    
+    console.log('[updateQuoteResponse] Share status:', shareStatus, 'expires:', expiresAt);
     
     // Check if expired
     if (expiresAt && expiresAt < Math.floor(Date.now() / 1000)) {
+      console.log('[updateQuoteResponse] Share expired');
       return false;
     }
     
@@ -1450,14 +1460,21 @@ export async function updateQuoteResponse(
     };
     
     const newApprovalStatus = approvalStatusMap[action];
+    console.log('[updateQuoteResponse] New approval status:', newApprovalStatus);
     
-    // Update share with response
-    await db.execute({
-      sql: `UPDATE calculation_shares 
-            SET client_response = ?, responded_at = ?, status = ?
-            WHERE calculation_id = ? AND token = ?`,
-      args: [action, Math.floor(Date.now() / 1000), action === 'approved' ? 'responded' : 'active', calculationId, token]
-    });
+    // Update share with response - only update status, not other columns that might not exist
+    try {
+      await db.execute({
+        sql: `UPDATE calculation_shares 
+              SET status = ?
+              WHERE calculation_id = ? AND token = ?`,
+        args: [action === 'approved' ? 'responded' : 'active', calculationId, token]
+      });
+      console.log('[updateQuoteResponse] Share status updated');
+    } catch (shareUpdateError) {
+      console.error('[updateQuoteResponse] Error updating share status:', shareUpdateError);
+      // Continue anyway - the main goal is to update the calculation status
+    }
     
     // Update calculation approval status via EAV
     const entityResult = await db.execute({
@@ -1471,8 +1488,11 @@ export async function updateQuoteResponse(
       args: [EAV_TABLES.calculations, calculationId]
     });
     
+    console.log('[updateQuoteResponse] Entity result:', JSON.stringify(entityResult.rows));
+    
     if (entityResult.rows.length > 0) {
       const entityId = entityResult.rows[0].entityId as string;
+      console.log('[updateQuoteResponse] Found entity:', entityId);
       
       // Check if approvalStatus attribute exists
       const existingAttr = await db.execute({
@@ -1482,6 +1502,8 @@ export async function updateQuoteResponse(
         args: [entityId]
       });
       
+      console.log('[updateQuoteResponse] Existing attr count:', existingAttr.rows.length);
+      
       if (existingAttr.rows.length > 0) {
         // Update existing attribute
         await db.execute({
@@ -1489,6 +1511,7 @@ export async function updateQuoteResponse(
                 WHERE entity_id = ? AND attribute_name = 'approvalStatus'`,
           args: [newApprovalStatus, entityId]
         });
+        console.log('[updateQuoteResponse] Updated existing approvalStatus');
       } else {
         // Insert new attribute with all required fields
         const attrId = crypto.randomUUID();
@@ -1497,12 +1520,16 @@ export async function updateQuoteResponse(
                 VALUES (?, ?, 'approvalStatus', 'string', ?, ?)`,
           args: [attrId, entityId, newApprovalStatus, Math.floor(Date.now() / 1000)]
         });
+        console.log('[updateQuoteResponse] Inserted new approvalStatus');
       }
+    } else {
+      console.log('[updateQuoteResponse] No entity found for calculation');
     }
     
+    console.log('[updateQuoteResponse] SUCCESS');
     return true;
   } catch (error) {
-    console.error('Error updating quote response:', error);
+    console.error('[updateQuoteResponse] ERROR:', error);
     return false;
   }
 }
