@@ -1317,39 +1317,75 @@ export async function getCalculationByShareToken(
     });
     
     const data: Record<string, any> = { id: calculationId };
+    // Reconstruct calculationData from flattened EAV attributes
+    const calculationDataFromEav: Record<string, any> = {};
+    
     for (const row of attrsResult.rows) {
       const name = row.attribute_name as string;
-      data[name] = row.json_value || row.string_value || row.number_value;
+      let value = row.json_value || row.string_value || row.number_value;
+      
+      // Parse JSON values if stored as strings
+      if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+        try {
+          value = JSON.parse(value);
+        } catch { /* keep as string */ }
+      }
+      
+      // Handle flattened calculationData attributes (e.g., calculationData.products)
+      if (name.startsWith('calculationData.')) {
+        const subKey = name.replace('calculationData.', '');
+        // Handle nested paths like calculationData.selectedClient.name
+        if (subKey.includes('.')) {
+          const parts = subKey.split('.');
+          let current = calculationDataFromEav;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (!current[parts[i]]) current[parts[i]] = {};
+            current = current[parts[i]];
+          }
+          current[parts[parts.length - 1]] = value;
+        } else {
+          calculationDataFromEav[subKey] = value;
+        }
+      } else if (name === 'calculationData') {
+        // Handle case where calculationData is stored as single JSON blob
+        if (typeof value === 'object') {
+          Object.assign(calculationDataFromEav, value);
+        }
+      } else {
+        data[name] = value;
+      }
     }
     
-    // Parse calculationData if it's a string
-    let calculationData = data.calculationData;
-    if (typeof calculationData === 'string') {
-      try {
-        calculationData = JSON.parse(calculationData);
-      } catch { /* ignore */ }
-    }
+    // Use reconstructed calculationData
+    let calculationData = calculationDataFromEav;
     
     // Get organization data if available
     let organization: PublicQuoteData['organization'] = null;
     if (organizationId) {
       const orgResult = await db.execute({
-        sql: `SELECT name, email, phone, address, ico, dic, ic_dph as icDph, vat_rate as vatRate
-              FROM organizations WHERE id = ? LIMIT 1`,
+        sql: `SELECT name, metadata FROM organization WHERE id = ? LIMIT 1`,
         args: [organizationId]
       });
       
       if (orgResult.rows.length > 0) {
         const orgRow = orgResult.rows[0];
+        // Parse metadata for additional org info
+        let metadata: any = {};
+        if (orgRow.metadata) {
+          try {
+            metadata = typeof orgRow.metadata === 'string' ? JSON.parse(orgRow.metadata) : orgRow.metadata;
+          } catch { /* ignore */ }
+        }
+        
         organization = {
           name: orgRow.name as string,
-          email: orgRow.email as string | null,
-          phone: orgRow.phone as string | null,
-          address: orgRow.address as string | null,
-          ico: orgRow.ico as string | null,
-          dic: orgRow.dic as string | null,
-          icDph: orgRow.icDph as string | null,
-          vatRate: orgRow.vatRate as number | null,
+          email: metadata.email || null,
+          phone: metadata.phone || null,
+          address: metadata.address || null,
+          ico: metadata.ico || null,
+          dic: metadata.dic || null,
+          icDph: metadata.icDph || metadata.ic_dph || null,
+          vatRate: metadata.vatRate || metadata.vat_rate || 23,
         };
       }
     }
@@ -1387,22 +1423,32 @@ export async function updateQuoteResponse(
 ): Promise<boolean> {
   try {
     const db = getClient();
+    console.log('[updateQuoteResponse] Starting update for calculation:', calculationId, 'action:', action);
     
-    // Verify token is valid first
+    // Verify token is valid first - try without status filter first
     const shareResult = await db.execute({
-      sql: `SELECT id, expires_at FROM calculation_shares 
-            WHERE calculation_id = ? AND token = ? AND status = 'active'
+      sql: `SELECT id, expires_at, status FROM calculation_shares 
+            WHERE calculation_id = ? AND token = ?
             LIMIT 1`,
       args: [calculationId, token]
     });
     
-    if (shareResult.rows.length === 0) return false;
+    console.log('[updateQuoteResponse] Share result:', JSON.stringify(shareResult.rows));
+    
+    if (shareResult.rows.length === 0) {
+      console.log('[updateQuoteResponse] No share found for token');
+      return false;
+    }
     
     const shareRow = shareResult.rows[0];
     const expiresAt = shareRow.expires_at as number;
+    const shareStatus = shareRow.status as string;
+    
+    console.log('[updateQuoteResponse] Share status:', shareStatus, 'expires:', expiresAt);
     
     // Check if expired
     if (expiresAt && expiresAt < Math.floor(Date.now() / 1000)) {
+      console.log('[updateQuoteResponse] Share expired');
       return false;
     }
     
@@ -1414,14 +1460,21 @@ export async function updateQuoteResponse(
     };
     
     const newApprovalStatus = approvalStatusMap[action];
+    console.log('[updateQuoteResponse] New approval status:', newApprovalStatus);
     
-    // Update share with response
-    await db.execute({
-      sql: `UPDATE calculation_shares 
-            SET client_response = ?, responded_at = ?, status = ?
-            WHERE calculation_id = ? AND token = ?`,
-      args: [action, Math.floor(Date.now() / 1000), action === 'approved' ? 'responded' : 'active', calculationId, token]
-    });
+    // Update share with response - only update status, not other columns that might not exist
+    try {
+      await db.execute({
+        sql: `UPDATE calculation_shares 
+              SET status = ?
+              WHERE calculation_id = ? AND token = ?`,
+        args: [action === 'approved' ? 'responded' : 'active', calculationId, token]
+      });
+      console.log('[updateQuoteResponse] Share status updated');
+    } catch (shareUpdateError) {
+      console.error('[updateQuoteResponse] Error updating share status:', shareUpdateError);
+      // Continue anyway - the main goal is to update the calculation status
+    }
     
     // Update calculation approval status via EAV
     const entityResult = await db.execute({
@@ -1435,20 +1488,48 @@ export async function updateQuoteResponse(
       args: [EAV_TABLES.calculations, calculationId]
     });
     
+    console.log('[updateQuoteResponse] Entity result:', JSON.stringify(entityResult.rows));
+    
     if (entityResult.rows.length > 0) {
       const entityId = entityResult.rows[0].entityId as string;
+      console.log('[updateQuoteResponse] Found entity:', entityId);
       
-      // Update or insert approvalStatus attribute
-      await db.execute({
-        sql: `INSERT OR REPLACE INTO attributes (entity_id, attribute_name, string_value, updated_at)
-              VALUES (?, 'approvalStatus', ?, ?)`,
-        args: [entityId, newApprovalStatus, Math.floor(Date.now() / 1000)]
+      // Check if approvalStatus attribute exists
+      const existingAttr = await db.execute({
+        sql: `SELECT id FROM attributes 
+              WHERE entity_id = ? AND attribute_name = 'approvalStatus'
+              LIMIT 1`,
+        args: [entityId]
       });
+      
+      console.log('[updateQuoteResponse] Existing attr count:', existingAttr.rows.length);
+      
+      if (existingAttr.rows.length > 0) {
+        // Update existing attribute
+        await db.execute({
+          sql: `UPDATE attributes SET string_value = ? 
+                WHERE entity_id = ? AND attribute_name = 'approvalStatus'`,
+          args: [newApprovalStatus, entityId]
+        });
+        console.log('[updateQuoteResponse] Updated existing approvalStatus');
+      } else {
+        // Insert new attribute with all required fields
+        const attrId = crypto.randomUUID();
+        await db.execute({
+          sql: `INSERT INTO attributes (id, entity_id, attribute_name, value_type, string_value, created_at)
+                VALUES (?, ?, 'approvalStatus', 'string', ?, ?)`,
+          args: [attrId, entityId, newApprovalStatus, Math.floor(Date.now() / 1000)]
+        });
+        console.log('[updateQuoteResponse] Inserted new approvalStatus');
+      }
+    } else {
+      console.log('[updateQuoteResponse] No entity found for calculation');
     }
     
+    console.log('[updateQuoteResponse] SUCCESS');
     return true;
   } catch (error) {
-    console.error('Error updating quote response:', error);
+    console.error('[updateQuoteResponse] ERROR:', error);
     return false;
   }
 }
@@ -1460,8 +1541,6 @@ export interface QuoteBundleItem {
   description: string | null;
   totalPrice: number | null;
   shareUrl: string | null;
-  clientResponse: string | null; // 'approved', 'rejected', 'question', null
-  respondedAt: Date | null;
 }
 
 export interface QuoteBundleData {
@@ -1549,34 +1628,12 @@ export async function getQuoteBundleByToken(
       
       const itemToken = itemShareTokens[calcId];
       
-      // Get share status (client response) - wrapped in try-catch to handle missing table
-      let clientResponse: string | null = null;
-      let respondedAt: Date | null = null;
-      if (itemToken) {
-        try {
-          const shareResult = await db.execute({
-            sql: `SELECT client_response, responded_at FROM calculation_shares 
-                  WHERE calculation_id = ? AND token = ? LIMIT 1`,
-            args: [calcId, itemToken]
-          });
-          if (shareResult.rows.length > 0) {
-            clientResponse = shareResult.rows[0].client_response as string | null;
-            const respondedAtRaw = shareResult.rows[0].responded_at as number | null;
-            respondedAt = respondedAtRaw ? new Date(respondedAtRaw * 1000) : null;
-          }
-        } catch {
-          // calculation_shares table might not exist or query failed - ignore
-        }
-      }
-      
       items.push({
         id: calcId,
         name: data.name || 'Kalkulácia',
         description: data.description || null,
         totalPrice: Number(data.actualTotalPrice || data.totalPrice) || null,
         shareUrl: itemToken ? `/quote/${calcId}/${itemToken}` : null,
-        clientResponse,
-        respondedAt,
       });
     }
     
@@ -1584,20 +1641,27 @@ export async function getQuoteBundleByToken(
     let organization: QuoteBundleData['organization'] = null;
     if (organizationId) {
       const orgResult = await db.execute({
-        sql: `SELECT name, email, phone, address, ico, vat_rate as vatRate
-              FROM organizations WHERE id = ? LIMIT 1`,
+        sql: `SELECT name, metadata FROM organization WHERE id = ? LIMIT 1`,
         args: [organizationId]
       });
       
       if (orgResult.rows.length > 0) {
         const orgRow = orgResult.rows[0];
+        // Parse metadata for additional org info
+        let metadata: any = {};
+        if (orgRow.metadata) {
+          try {
+            metadata = typeof orgRow.metadata === 'string' ? JSON.parse(orgRow.metadata) : orgRow.metadata;
+          } catch { /* ignore */ }
+        }
+        
         organization = {
           name: orgRow.name as string,
-          email: orgRow.email as string | null,
-          phone: orgRow.phone as string | null,
-          address: orgRow.address as string | null,
-          ico: orgRow.ico as string | null,
-          vatRate: orgRow.vatRate as number | null,
+          email: metadata.email || null,
+          phone: metadata.phone || null,
+          address: metadata.address || null,
+          ico: metadata.ico || null,
+          vatRate: metadata.vatRate || metadata.vat_rate || 23,
         };
       }
     }
