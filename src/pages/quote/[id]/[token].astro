@@ -115,6 +115,9 @@ const statusConfig: Record<string, { label: string; color: string; bgColor: stri
 const respondedAction = Astro.url.searchParams.get('responded');
 const justResponded = !!respondedAction;
 
+// Check for bundleUrl query param (came from bundle page)
+const bundleUrl = Astro.url.searchParams.get('bundleUrl');
+
 const approvalStatus = calculation.approvalStatus || 'DRAFT';
 const currentStatus = statusConfig[approvalStatus] || statusConfig['DRAFT'];
 const isApproved = approvalStatus === 'CLIENT_APPROVED' || respondedAction === 'approved';
@@ -125,6 +128,19 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
 <Layout title={`Cenová ponuka - ${calculation.name}`}>
   <main class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
     <div class="max-w-2xl mx-auto px-5 py-10">
+      
+      {/* Back to bundle button */}
+      {bundleUrl && (
+        <a 
+          href={bundleUrl}
+          class="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
+        >
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Späť na zoznam ponúk
+        </a>
+      )}
       
       {/* Header */}
       <div class="text-center mb-6">
