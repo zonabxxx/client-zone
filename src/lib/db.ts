@@ -1549,19 +1549,23 @@ export async function getQuoteBundleByToken(
       
       const itemToken = itemShareTokens[calcId];
       
-      // Get share status (client response)
+      // Get share status (client response) - wrapped in try-catch to handle missing table
       let clientResponse: string | null = null;
       let respondedAt: Date | null = null;
       if (itemToken) {
-        const shareResult = await db.execute({
-          sql: `SELECT client_response, responded_at FROM calculation_shares 
-                WHERE calculation_id = ? AND token = ? LIMIT 1`,
-          args: [calcId, itemToken]
-        });
-        if (shareResult.rows.length > 0) {
-          clientResponse = shareResult.rows[0].client_response as string | null;
-          const respondedAtRaw = shareResult.rows[0].responded_at as number | null;
-          respondedAt = respondedAtRaw ? new Date(respondedAtRaw * 1000) : null;
+        try {
+          const shareResult = await db.execute({
+            sql: `SELECT client_response, responded_at FROM calculation_shares 
+                  WHERE calculation_id = ? AND token = ? LIMIT 1`,
+            args: [calcId, itemToken]
+          });
+          if (shareResult.rows.length > 0) {
+            clientResponse = shareResult.rows[0].client_response as string | null;
+            const respondedAtRaw = shareResult.rows[0].responded_at as number | null;
+            respondedAt = respondedAtRaw ? new Date(respondedAtRaw * 1000) : null;
+          }
+        } catch {
+          // calculation_shares table might not exist or query failed - ignore
         }
       }
       
