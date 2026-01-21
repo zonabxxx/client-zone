@@ -8,7 +8,7 @@ const DB_TOKEN = import.meta.env.DB_TOKEN || process.env.DB_TOKEN;
 let client: Client | null = null;
 let connectionError: string | null = null;
 
-function getClient(): Client {
+export function getClient(): Client {
   if (client) return client;
   
   if (!DB_URL) {
