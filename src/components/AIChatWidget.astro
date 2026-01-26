@@ -1,0 +1,294 @@
+---
+// AI Chat Widget Component
+interface Props {
+  customerName?: string;
+}
+
+const { customerName = 'Klient' } = Astro.props;
+
+// Predefined quick actions and FAQs
+const quickActions = [
+  { id: 'status', label: 'Stav zákazky', icon: '📦' },
+  { id: 'deadline', label: 'Termíny', icon: '📅' },
+  { id: 'quote', label: 'Cenová ponuka', icon: '💰' },
+  { id: 'contact', label: 'Kontakt', icon: '📞' },
+];
+
+const faqs = [
+  { 
+    question: 'Aké sú termíny dodania?', 
+    answer: 'Štandardná doba dodania je 5-7 pracovných dní. Pri expresných zákazkách 2-3 dni.' 
+  },
+  { 
+    question: 'Aké formáty súborov prijímate?', 
+    answer: 'Prijímame PDF, AI, EPS, PSD vo vysokom rozlíšení (min. 150 DPI pre veľkoformát).' 
+  },
+  { 
+    question: 'Ako môžem zmeniť grafiku na billboarde?', 
+    answer: 'Kontaktujte nás emailom na info@adsun.sk s novou grafikou. Výmena trvá 2-3 dni.' 
+  },
+];
+---
+
+<!-- AI Chat Toggle Button -->
+<button 
+  id="chatToggle"
+  class="fixed bottom-6 right-6 md:bottom-8 md:right-8 w-14 h-14 bg-gradient-to-br from-[#f59e0b] to-[#d97706] rounded-full shadow-lg shadow-[#f59e0b]/30 flex items-center justify-center z-50 hover:scale-110 transition-transform"
+  aria-label="Otvoriť chat"
+>
+  <svg id="chatIcon" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+  </svg>
+  <svg id="closeIcon" class="hidden" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+</button>
+
+<!-- Chat Panel -->
+<div 
+  id="chatPanel"
+  class="fixed bottom-24 right-6 md:bottom-28 md:right-8 w-[calc(100%-3rem)] md:w-96 max-h-[70vh] bg-[#111111] border border-[#2a2a2a] rounded-2xl shadow-2xl z-50 hidden flex-col overflow-hidden"
+>
+  <!-- Header -->
+  <div class="bg-gradient-to-r from-[#f59e0b] to-[#d97706] p-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 bg-[#0a0a0a]/20 rounded-full flex items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      </div>
+      <div>
+        <h3 class="font-semibold text-[#0a0a0a]">ADSUN Asistent</h3>
+        <p class="text-xs text-[#0a0a0a]/70">Ako vám môžem pomôcť?</p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Chat Messages -->
+  <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4 max-h-80">
+    <!-- Welcome message -->
+    <div class="flex gap-3">
+      <div class="w-8 h-8 bg-[#f59e0b]/20 rounded-full flex items-center justify-center flex-shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42"/>
+        </svg>
+      </div>
+      <div class="flex-1">
+        <div class="bg-[#1a1a1a] rounded-2xl rounded-tl-none p-3 text-sm text-white">
+          Dobrý deň! 👋 Som váš ADSUN asistent. Môžem vám pomôcť s:
+          <ul class="mt-2 space-y-1 text-[#9ca3af]">
+            <li>• Informáciami o zákazkách</li>
+            <li>• Termínmi a cenami</li>
+            <li>• Radami pre tlač a polepy</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="flex flex-wrap gap-2">
+      {quickActions.map(action => (
+        <button 
+          class="quick-action px-3 py-2 bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#333] hover:border-[#f59e0b] rounded-lg text-sm text-white transition-all flex items-center gap-2"
+          data-action={action.id}
+        >
+          <span>{action.icon}</span>
+          <span>{action.label}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+  
+  <!-- FAQ Section -->
+  <div id="faqSection" class="border-t border-[#2a2a2a] p-4">
+    <p class="text-xs text-[#6b7280] mb-3">Časté otázky:</p>
+    <div class="space-y-2">
+      {faqs.map((faq, i) => (
+        <button 
+          class="faq-btn w-full text-left px-3 py-2 bg-[#1a1a1a] hover:bg-[#2a2a2a] rounded-lg text-xs text-[#9ca3af] hover:text-white transition-all"
+          data-answer={faq.answer}
+        >
+          {faq.question}
+        </button>
+      ))}
+    </div>
+  </div>
+  
+  <!-- Input -->
+  <div class="border-t border-[#2a2a2a] p-4">
+    <form id="chatForm" class="flex gap-2">
+      <input 
+        type="text" 
+        id="chatInput"
+        placeholder="Napíšte správu..."
+        class="flex-1 bg-[#1a1a1a] border border-[#333] rounded-lg px-4 py-2 text-sm text-white placeholder-[#6b7280] focus:border-[#f59e0b] focus:outline-none"
+      />
+      <button 
+        type="submit"
+        class="w-10 h-10 bg-[#f59e0b] hover:bg-[#fbbf24] rounded-lg flex items-center justify-center transition-colors"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  const chatToggle = document.getElementById('chatToggle');
+  const chatPanel = document.getElementById('chatPanel');
+  const chatIcon = document.getElementById('chatIcon');
+  const closeIcon = document.getElementById('closeIcon');
+  const chatMessages = document.getElementById('chatMessages');
+  const chatForm = document.getElementById('chatForm');
+  const chatInput = document.getElementById('chatInput') as HTMLInputElement;
+  
+  let isOpen = false;
+  
+  // Toggle chat
+  chatToggle?.addEventListener('click', () => {
+    isOpen = !isOpen;
+    chatPanel?.classList.toggle('hidden', !isOpen);
+    chatPanel?.classList.toggle('flex', isOpen);
+    chatIcon?.classList.toggle('hidden', isOpen);
+    closeIcon?.classList.toggle('hidden', !isOpen);
+  });
+  
+  // Add message to chat
+  function addMessage(content: string, isUser: boolean = false) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`;
+    
+    const avatar = isUser 
+      ? `<div class="w-8 h-8 bg-[#333] rounded-full flex items-center justify-center flex-shrink-0">
+           <span class="text-xs font-bold text-white">Vy</span>
+         </div>`
+      : `<div class="w-8 h-8 bg-[#f59e0b]/20 rounded-full flex items-center justify-center flex-shrink-0">
+           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+             <circle cx="12" cy="12" r="3"/><path d="M12 1v2"/>
+           </svg>
+         </div>`;
+    
+    const bubbleClass = isUser 
+      ? 'bg-[#f59e0b] text-[#0a0a0a] rounded-2xl rounded-tr-none'
+      : 'bg-[#1a1a1a] text-white rounded-2xl rounded-tl-none';
+    
+    messageDiv.innerHTML = `
+      ${avatar}
+      <div class="flex-1 ${isUser ? 'flex justify-end' : ''}">
+        <div class="${bubbleClass} p-3 text-sm max-w-[85%] ${isUser ? 'inline-block' : ''}">${content}</div>
+      </div>
+    `;
+    
+    chatMessages?.appendChild(messageDiv);
+    chatMessages?.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
+  }
+  
+  // AI responses based on keywords
+  function getAIResponse(message: string): string {
+    const lower = message.toLowerCase();
+    
+    if (lower.includes('stav') || lower.includes('zákazk') || lower.includes('objednávk')) {
+      return 'Pre aktuálny stav vašich zákaziek navštívte sekciu <strong>"Moje zákazky"</strong> na dashboarde. Tam nájdete prehľad všetkých aktívnych aj dokončených zákaziek. 📦';
+    }
+    
+    if (lower.includes('termín') || lower.includes('dodanie') || lower.includes('kedy')) {
+      return 'Štandardná doba dodania je <strong>5-7 pracovných dní</strong>. Pri expresných zákazkách <strong>2-3 dni</strong>. Konkrétny termín nájdete v detaile vašej zákazky. ⏰';
+    }
+    
+    if (lower.includes('cen') || lower.includes('ponuk') || lower.includes('koľko')) {
+      return 'Aktuálne cenové ponuky nájdete v sekcii <strong>"Cenové ponuky"</strong>. Pre novú ponuku nás kontaktujte na <a href="tel:+421903222751" class="text-[#f59e0b]">+421 903 222 751</a>. 💰';
+    }
+    
+    if (lower.includes('tlač') || lower.includes('print') || lower.includes('formát')) {
+      return '🖨️ <strong>Tipy pre tlač:</strong><br>• Rozlíšenie min. 150 DPI pre veľkoformát<br>• Formáty: PDF, AI, EPS, PSD<br>• CMYK farebný priestor<br>• 3mm spadávka pre orez';
+    }
+    
+    if (lower.includes('polep') || lower.includes('vozidl') || lower.includes('auto')) {
+      return '🚗 <strong>Polepy vozidiel:</strong><br>• Použite vektorovú grafiku<br>• Počítajte s krivkami karosérie<br>• Životnosť 5-7 rokov<br>• Možnosť čiastočného aj celopolepenia';
+    }
+    
+    if (lower.includes('svetel') || lower.includes('reklam') || lower.includes('led') || lower.includes('neon')) {
+      return '💡 <strong>Svetelná reklama:</strong><br>• LED technológia - úsporná<br>• Možnosť programovateľných efektov<br>• Životnosť 50 000+ hodín<br>• Vonkajšie aj vnútorné použitie';
+    }
+    
+    if (lower.includes('billboard')) {
+      return '🪧 Máme 60+ billboardov v okolí Pezinka a Bratislavy. Pozrite si dostupné lokality v sekcii <strong>"Billboardy"</strong> alebo na <a href="https://adsun.sk/billboardy" class="text-[#f59e0b]" target="_blank">adsun.sk/billboardy</a>';
+    }
+    
+    if (lower.includes('kontakt') || lower.includes('telefón') || lower.includes('email')) {
+      return '📞 <strong>Kontaktujte nás:</strong><br>Tel: <a href="tel:+421903222751" class="text-[#f59e0b]">+421 903 222 751</a><br>Email: <a href="mailto:info@adsun.sk" class="text-[#f59e0b]">info@adsun.sk</a><br>Adresa: Pezinok';
+    }
+    
+    if (lower.includes('body') || lower.includes('odmena') || lower.includes('zľava') || lower.includes('vernost')) {
+      return '⭐ <strong>ADSUN Rewards:</strong><br>Za každú zákazku získavate body! Sledujte svoj stav na dashboarde. Viac bodov = väčšie zľavy a výhody. 🎁';
+    }
+    
+    return 'Ďakujem za vašu správu! Pre konkrétne informácie ma môžete spýtať na:<br>• Stav zákazky<br>• Termíny dodania<br>• Tipy pre tlač/polepy<br>• Cenové ponuky<br><br>Alebo nás kontaktujte na <a href="tel:+421903222751" class="text-[#f59e0b]">+421 903 222 751</a> 📞';
+  }
+  
+  // Handle form submit
+  chatForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const message = chatInput?.value.trim();
+    if (!message) return;
+    
+    addMessage(message, true);
+    chatInput.value = '';
+    
+    // Simulate typing
+    setTimeout(() => {
+      addMessage(getAIResponse(message));
+    }, 500);
+  });
+  
+  // Quick actions
+  document.querySelectorAll('.quick-action').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.getAttribute('data-action');
+      let query = '';
+      switch(action) {
+        case 'status': query = 'Aký je stav mojej zákazky?'; break;
+        case 'deadline': query = 'Aké sú termíny dodania?'; break;
+        case 'quote': query = 'Potrebujem cenovú ponuku'; break;
+        case 'contact': query = 'Ako vás môžem kontaktovať?'; break;
+      }
+      if (query) {
+        addMessage(query, true);
+        setTimeout(() => addMessage(getAIResponse(query)), 500);
+      }
+    });
+  });
+  
+  // FAQ buttons
+  document.querySelectorAll('.faq-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const question = btn.textContent?.trim() || '';
+      const answer = btn.getAttribute('data-answer') || '';
+      addMessage(question, true);
+      setTimeout(() => addMessage(answer), 500);
+    });
+  });
+</script>
+
+<style>
+  #chatPanel {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>

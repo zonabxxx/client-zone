@@ -1,12 +1,25 @@
 ---
 import '../styles/global.css';
+import SideNavigation from '../components/SideNavigation.astro';
+import AIChatWidget from '../components/AIChatWidget.astro';
+import { getSessionFromCookie } from '../lib/session';
 
 interface Props {
   title: string;
   description?: string;
+  showNav?: boolean;
+  activeNav?: 'dashboard' | 'orders' | 'quotes' | 'billboards' | 'installations' | 'messages' | 'tips';
 }
 
-const { title, description = 'Sledujte stav vašich zákaziek v reálnom čase' } = Astro.props;
+const { 
+  title, 
+  description = 'Sledujte stav vašich zákaziek v reálnom čase',
+  showNav = true,
+  activeNav = 'dashboard'
+} = Astro.props;
+
+// Get session for AI chat
+const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
 ---
 
 <!doctype html>
@@ -16,32 +29,38 @@ const { title, description = 'Sledujte stav vašich zákaziek v reálnom čase' 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>{title} | Klientský Portál</title>
+    <title>{title} | ADSUN Klientský Portál</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   </head>
-  <body class="bg-gradient-animated min-h-screen">
-    <!-- Decorative background elements -->
-    <div class="fixed inset-0 overflow-hidden pointer-events-none">
-      <div class="absolute -top-1/4 -right-1/4 w-1/2 h-1/2 bg-primary-600/10 rounded-full blur-3xl"></div>
-      <div class="absolute -bottom-1/4 -left-1/4 w-1/2 h-1/2 bg-accent-500/5 rounded-full blur-3xl"></div>
+  <body class="bg-[#0a0a0a] min-h-screen">
+    <!-- Geometric background decoration -->
+    <div class="geometric-bg">
+      <div class="geometric-lines"></div>
     </div>
     
-    <!-- Main content -->
-    <div class="relative z-10">
-      <slot />
+    <!-- App container -->
+    <div class="relative z-10 flex min-h-screen">
+      <!-- Side Navigation -->
+      {showNav && <SideNavigation active={activeNav} />}
+      
+      <!-- Main content area -->
+      <div class={`flex-1 ${showNav ? 'ml-0 md:ml-16' : ''}`}>
+        <slot />
+      </div>
     </div>
     
     <!-- Footer -->
-    <footer class="relative z-10 py-8 mt-auto">
-      <div class="max-w-6xl mx-auto px-4 text-center">
-        <p class="text-slate-500 text-sm">
-          © {new Date().getFullYear()} Klientský Portál. Všetky práva vyhradené.
-        </p>
-      </div>
+    <footer class="relative z-10 py-6 text-center border-t border-[#1a1a1a] bg-[#0a0a0a]">
+      <p class="text-[#6b7280] text-sm">
+        © {new Date().getFullYear()} ADSUN, Všetky práva vyhradené
+      </p>
     </footer>
+    
+    <!-- AI Chat Widget (only for logged in users) -->
+    {session && <AIChatWidget customerName={session.customerName} />}
   </body>
 </html>

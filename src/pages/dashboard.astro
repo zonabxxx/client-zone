@@ -3,8 +3,6 @@ import Layout from '../layouts/Layout.astro';
 import { getSessionFromCookie } from '../lib/session';
 import { getCustomerOrders } from '../lib/db';
 import OrderCard from '../components/OrderCard.astro';
-import DashboardHeader from '../components/DashboardHeader.astro';
-import Navigation from '../components/Navigation.astro';
 
 // Check authentication
 const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
@@ -21,52 +19,99 @@ const stats = {
   total: orders.length,
   active: orders.filter(o => ['CONFIRMED', 'IN_PROGRESS'].includes(o.status)).length,
   completed: orders.filter(o => o.status === 'COMPLETED').length,
-  totalValue: orders.reduce((sum, o) => sum + (o.totalValue || 0), 0),
+  pending: orders.filter(o => o.status === 'DRAFT').length,
 };
 ---
 
-<Layout title="Moje zákazky">
-  <main class="min-h-screen">
-    <DashboardHeader customerName={session.customerName} />
+<Layout title="Dashboard" activeNav="dashboard">
+  <main class="min-h-screen pb-24 md:pb-8">
+    <!-- Header -->
+    <header class="px-6 py-8 md:px-8">
+      <div class="max-w-6xl mx-auto">
+        <!-- Breadcrumb -->
+        <div class="flex items-center gap-2 text-sm text-[#6b7280] mb-6">
+          <a href="/dashboard" class="hover:text-[#f59e0b] transition-colors flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            Domov
+          </a>
+        </div>
+        
+        <!-- Title section -->
+        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">
+              <span class="text-gradient-orange">Moje</span> zákazky
+            </h1>
+            <p class="text-[#9ca3af]">
+              Vitajte späť, <span class="text-white font-medium">{session.customerName}</span>
+            </p>
+          </div>
+          
+          <a href="tel:+421903222751" class="btn-adsun-outline inline-flex items-center gap-2 self-start">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+            Mám záujem
+          </a>
+        </div>
+        
+        <!-- Orange divider -->
+        <hr class="divider-orange mt-6" />
+      </div>
+    </header>
     
-    <div class="max-w-6xl mx-auto px-4 py-8">
-      <Navigation active="orders" />
-      
+    <div class="max-w-6xl mx-auto px-6 md:px-8">
       <!-- Stats Grid -->
-      <div class="grid grid-cols-3 gap-4 mb-8">
-        <div class="glass rounded-2xl p-6 animate-fade-in-up">
-          <div class="text-3xl font-bold text-white mb-1">{stats.total}</div>
-          <div class="text-slate-400 text-sm">Celkom zákaziek</div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="adsun-card p-6 animate-fade-in-up">
+          <div class="stats-number text-white mb-1">{stats.total}</div>
+          <div class="text-[#6b7280] text-sm">Celkom zákaziek</div>
         </div>
-        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-1">
-          <div class="text-3xl font-bold text-amber-400 mb-1">{stats.active}</div>
-          <div class="text-slate-400 text-sm">Aktívne</div>
+        <div class="adsun-card p-6 animate-fade-in-up stagger-1">
+          <div class="stats-number stats-number-orange mb-1">{stats.active}</div>
+          <div class="text-[#6b7280] text-sm">Aktívne</div>
         </div>
-        <div class="glass rounded-2xl p-6 animate-fade-in-up stagger-2">
-          <div class="text-3xl font-bold text-emerald-400 mb-1">{stats.completed}</div>
-          <div class="text-slate-400 text-sm">Dokončené</div>
+        <div class="adsun-card p-6 animate-fade-in-up stagger-2">
+          <div class="stats-number stats-number-green mb-1">{stats.completed}</div>
+          <div class="text-[#6b7280] text-sm">Dokončené</div>
+        </div>
+        <div class="adsun-card p-6 animate-fade-in-up stagger-3">
+          <div class="stats-number stats-number-blue mb-1">{stats.pending}</div>
+          <div class="text-[#6b7280] text-sm">Čakajúce</div>
         </div>
       </div>
 
       <!-- Filter tabs -->
-      <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
-        <button data-filter="all" class="filter-btn active px-4 py-2 rounded-xl text-sm font-medium transition-all">
+      <div class="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+        <button data-filter="all" class="filter-btn active">
           Všetky
         </button>
-        <button data-filter="active" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all">
+        <button data-filter="active" class="filter-btn">
           Aktívne
         </button>
-        <button data-filter="completed" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all">
+        <button data-filter="completed" class="filter-btn">
           Dokončené
         </button>
       </div>
 
       <!-- Orders list -->
       {orders.length === 0 ? (
-        <div class="glass rounded-3xl p-12 text-center animate-fade-in-up">
-          <div class="text-6xl mb-4">📭</div>
+        <div class="adsun-card p-12 text-center animate-fade-in-up">
+          <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-[#1a1a1a] flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            </svg>
+          </div>
           <h2 class="text-xl font-semibold text-white mb-2">Zatiaľ žiadne zákazky</h2>
-          <p class="text-slate-400">Vaše zákazky sa tu zobrazia hneď ako budú vytvorené.</p>
+          <p class="text-[#6b7280] mb-6">Vaše zákazky sa tu zobrazia hneď ako budú vytvorené.</p>
+          <a href="tel:+421903222751" class="btn-adsun-primary inline-flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+            Kontaktovať nás
+          </a>
         </div>
       ) : (
         <div class="space-y-4" id="ordersContainer">
@@ -81,20 +126,36 @@ const stats = {
 
 <style>
   .filter-btn {
-    background: rgba(255, 255, 255, 0.05);
-    color: #94a3b8;
+    background: rgba(26, 26, 26, 0.8);
+    color: #9ca3af;
     border: 1px solid transparent;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    white-space: nowrap;
   }
   
   .filter-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e2e8f0;
+    background: rgba(42, 42, 42, 0.8);
+    color: #ffffff;
+    border-color: rgba(245, 158, 11, 0.3);
   }
   
   .filter-btn.active {
-    background: #0552b5;
-    color: white;
-    border-color: #0967d2;
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.5);
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 </style>
 

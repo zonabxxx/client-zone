@@ -69,11 +69,23 @@ const vatRate = organization?.vatRate ?? 20;
 
 // Calculate totals
 const computeProductTotal = (p: any): number => {
+  // 1. Priorita: Uložená totalCost hodnota (správna celková cena produktu)
   const stored = Number(p?.totalCost) || 0;
   if (stored > 0) return stored;
+  
+  // 2. Fallback: finalPrice alebo price z produktu (tiež celková cena)
+  const productPrice = Number(p?.finalPrice) || Number(p?.price) || 0;
+  if (productPrice > 0) return productPrice;
+  
+  // 3. Fallback: unitSalePrice × quantity (jednotková cena × množstvo)
   const qty = Number(p?.quantity) || 1;
-  const base = Number(p?.variant?.salePrice || p?.variant?.basePrice) || 0;
-  return base * qty;
+  const unitPrice = Number(p?.variant?.unitSalePrice) || Number(p?.unitPrice) || 0;
+  if (unitPrice > 0) return unitPrice * qty;
+  
+  // 4. Posledná možnosť: basePrice (ale NIE násobené qty, pretože basePrice je často celková cena)
+  // POZOR: variant.salePrice je "Total for X variants" - NENÁSOBIŤ s quantity!
+  const basePrice = Number(p?.variant?.basePrice) || 0;
+  return basePrice; // Vráť bez násobenia - basePrice je už celková suma
 };
 
 const productTotal = products.reduce((sum: number, p: any) => sum + computeProductTotal(p), 0);

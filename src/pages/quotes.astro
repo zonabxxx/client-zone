@@ -2,8 +2,6 @@
 import Layout from '../layouts/Layout.astro';
 import { getSessionFromCookie } from '../lib/session';
 import { getClientCalculations, getOrderByCalculationId, getClientProjects, type Project, type Calculation } from '../lib/db';
-import DashboardHeader from '../components/DashboardHeader.astro';
-import Navigation from '../components/Navigation.astro';
 import { format } from 'date-fns';
 import { sk } from 'date-fns/locale';
 
@@ -66,13 +64,13 @@ const stats = {
   pending: calculations.filter(c => c.approvalStatus === 'CLIENT_VIEWED').length,
 };
 
-// Approval status labels and colors
-const statusConfig: Record<string, { label: string; color: string; bgColor: string }> = {
-  'DRAFT': { label: 'V príprave', color: 'text-slate-400', bgColor: 'bg-slate-500/20' },
-  'CLIENT_VIEWED': { label: 'Čaká na schválenie', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
-  'CLIENT_APPROVED': { label: 'Schválené', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
-  'CLIENT_REJECTED': { label: 'Zamietnuté', color: 'text-red-400', bgColor: 'bg-red-500/20' },
-  'CLIENT_REQUESTED_CHANGES': { label: 'Požadované zmeny', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+// Approval status labels and colors - ADSUN style
+const statusConfig: Record<string, { label: string; cssClass: string }> = {
+  'DRAFT': { label: 'V príprave', cssClass: 'status-draft' },
+  'CLIENT_VIEWED': { label: 'Čaká na schválenie', cssClass: 'status-in-progress' },
+  'CLIENT_APPROVED': { label: 'Schválené', cssClass: 'status-completed' },
+  'CLIENT_REJECTED': { label: 'Zamietnuté', cssClass: 'status-cancelled' },
+  'CLIENT_REQUESTED_CHANGES': { label: 'Požadované zmeny', cssClass: 'status-in-progress' },
 };
 
 function formatDate(date: Date | null): string {
@@ -85,57 +83,88 @@ function formatDate(date: Date | null): string {
 }
 ---
 
-<Layout title="Cenové ponuky">
-  <main class="min-h-screen">
-    <DashboardHeader customerName={session.customerName} />
+<Layout title="Cenové ponuky" activeNav="quotes">
+  <main class="min-h-screen pb-24 md:pb-8">
+    <!-- Header -->
+    <header class="px-6 py-8 md:px-8">
+      <div class="max-w-6xl mx-auto">
+        <!-- Breadcrumb -->
+        <div class="flex items-center gap-2 text-sm text-[#6b7280] mb-6">
+          <a href="/dashboard" class="hover:text-[#f59e0b] transition-colors flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            Domov
+          </a>
+        </div>
+        
+        <!-- Title section -->
+        <div>
+          <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">
+            <span class="text-gradient-orange">Cenové</span> ponuky
+          </h1>
+          <p class="text-[#9ca3af]">
+            Prehľad a schvaľovanie cenových ponúk
+          </p>
+        </div>
+        
+        <!-- Orange divider -->
+        <hr class="divider-orange mt-6" />
+      </div>
+    </header>
     
-    <div class="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-      <Navigation active="quotes" />
-      
-      <!-- Mobile: 2x2 grid, Desktop: 4 columns -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
-        <div class="glass rounded-xl sm:rounded-2xl p-3 sm:p-6 animate-fade-in-up">
-          <div class="text-2xl sm:text-3xl font-bold text-white mb-0.5 sm:mb-1">{stats.total}</div>
-          <div class="text-slate-400 text-xs sm:text-sm">Ponúk</div>
+    <div class="max-w-6xl mx-auto px-6 md:px-8">
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="adsun-card p-6 animate-fade-in-up">
+          <div class="stats-number text-white mb-1">{stats.total}</div>
+          <div class="text-[#6b7280] text-sm">Celkom ponúk</div>
         </div>
-        <div class="glass rounded-xl sm:rounded-2xl p-3 sm:p-6 animate-fade-in-up stagger-1">
-          <div class="text-2xl sm:text-3xl font-bold text-blue-400 mb-0.5 sm:mb-1">{stats.projects}</div>
-          <div class="text-slate-400 text-xs sm:text-sm">Projektov</div>
+        <div class="adsun-card p-6 animate-fade-in-up stagger-1">
+          <div class="stats-number stats-number-blue mb-1">{stats.projects}</div>
+          <div class="text-[#6b7280] text-sm">Projektov</div>
         </div>
-        <div class="glass rounded-xl sm:rounded-2xl p-3 sm:p-6 animate-fade-in-up stagger-2 border border-emerald-500/30 bg-emerald-500/5">
-          <div class="text-2xl sm:text-3xl font-bold text-emerald-400 mb-0.5 sm:mb-1">{stats.approved}</div>
-          <div class="text-slate-400 text-xs sm:text-sm">Schválených</div>
+        <div class="adsun-card adsun-card-active p-6 animate-fade-in-up stagger-2">
+          <div class="stats-number stats-number-green mb-1">{stats.approved}</div>
+          <div class="text-[#6b7280] text-sm">Schválených</div>
         </div>
-        <div class="glass rounded-xl sm:rounded-2xl p-3 sm:p-6 animate-fade-in-up stagger-3">
-          <div class="text-2xl sm:text-3xl font-bold text-amber-400 mb-0.5 sm:mb-1">{stats.pending}</div>
-          <div class="text-slate-400 text-xs sm:text-sm">Čaká</div>
+        <div class="adsun-card p-6 animate-fade-in-up stagger-3">
+          <div class="stats-number stats-number-orange mb-1">{stats.pending}</div>
+          <div class="text-[#6b7280] text-sm">Čaká na schválenie</div>
         </div>
       </div>
 
-      <!-- Filter buttons - scrollable on mobile -->
-      <div class="flex gap-1.5 sm:gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2 -mx-3 px-3 sm:mx-0 sm:px-0">
-        <button data-filter="all" class="filter-btn active px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap">
+      <!-- Filter tabs -->
+      <div class="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+        <button data-filter="all" class="filter-btn active">
           Všetky
         </button>
-        <button data-filter="pending" class="filter-btn px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap">
+        <button data-filter="pending" class="filter-btn">
           Na schválenie
         </button>
-        <button data-filter="approved" class="filter-btn px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap">
+        <button data-filter="approved" class="filter-btn">
           Schválené
         </button>
-        <button data-filter="draft" class="filter-btn px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap">
+        <button data-filter="draft" class="filter-btn">
           V príprave
         </button>
       </div>
 
       {calculations.length === 0 ? (
-        <div class="glass rounded-3xl p-12 text-center animate-fade-in-up">
-          <div class="text-6xl mb-4">💰</div>
+        <div class="adsun-card p-12 text-center animate-fade-in-up">
+          <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-[#1a1a1a] flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
           <h2 class="text-xl font-semibold text-white mb-2">Zatiaľ žiadne cenové ponuky</h2>
-          <p class="text-slate-400">Vaše cenové ponuky sa tu zobrazia hneď ako budú vytvorené.</p>
+          <p class="text-[#6b7280]">Vaše cenové ponuky sa tu zobrazia hneď ako budú vytvorené.</p>
         </div>
       ) : (
-        <div class="space-y-3 sm:space-y-6" id="calculationsContainer">
+        <div class="space-y-4" id="calculationsContainer">
           {/* Projects with calculations */}
           {groupedProjects.map((group, projectIndex) => {
             const projectApproved = group.calculations.filter(c => c.approvalStatus === 'CLIENT_APPROVED').length;
@@ -144,40 +173,46 @@ function formatDate(date: Date | null): string {
             
             return (
               <details 
-                class={`project-group rounded-xl sm:rounded-2xl overflow-hidden animate-fade-in-up ${allApproved ? 'border-2 border-emerald-500/50 bg-emerald-500/10' : 'glass'}`}
+                class={`project-group adsun-card overflow-hidden animate-fade-in-up ${allApproved ? 'adsun-card-active' : ''}`}
                 style={`animation-delay: ${projectIndex * 50}ms`}
                 open
               >
-                <summary class="flex items-center justify-between p-3 sm:p-5 cursor-pointer hover:bg-white/5 transition-colors">
-                  <div class="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
-                    <span class="text-xl sm:text-2xl flex-shrink-0">📁</span>
+                <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-[#1a1a1a] transition-colors">
+                  <div class="flex items-center gap-4 flex-1 min-w-0">
+                    <div class="w-10 h-10 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center flex-shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                      </svg>
+                    </div>
                     <div class="min-w-0 flex-1">
-                      <h3 class="text-sm sm:text-lg font-semibold text-white truncate">{group.project.name}</h3>
-                      <div class="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-400 flex-wrap">
+                      <h3 class="text-lg font-semibold text-white truncate">{group.project.name}</h3>
+                      <div class="flex items-center gap-3 text-sm text-[#9ca3af]">
                         <span>{projectTotal} {projectTotal === 1 ? 'ponuka' : projectTotal < 5 ? 'ponuky' : 'ponúk'}</span>
                         {projectApproved > 0 && (
-                          <span class="flex items-center gap-1 text-emerald-400">
-                            <span>✅</span> <span class="hidden sm:inline">{projectApproved} schválených</span><span class="sm:hidden">{projectApproved}</span>
+                          <span class="flex items-center gap-1 text-[#4ade80]">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            {projectApproved} schválených
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div class="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+                  <div class="flex items-center gap-4 flex-shrink-0">
                     <div class="text-right">
-                      <div class="text-sm sm:text-lg font-bold text-emerald-400">
+                      <div class="text-lg font-bold text-[#f59e0b]">
                         {group.project.totalPrice?.toLocaleString('sk-SK', { minimumFractionDigits: 0 }) || '0'} €
                       </div>
-                      <div class="text-[10px] sm:text-xs text-slate-400 hidden sm:block">Celkom</div>
                     </div>
-                    <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 transition-transform project-chevron flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    <svg class="w-5 h-5 text-[#6b7280] transition-transform project-chevron flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 12 15 18 9"/>
                     </svg>
                   </div>
                 </summary>
                 
-                <div class="border-t border-white/10 bg-black/20">
-                  <div class="p-2 sm:p-4 space-y-2 sm:space-y-3">
+                <div class="border-t border-[#2a2a2a] bg-[#0f0f0f]">
+                  <div class="p-4 space-y-3">
                     {group.calculations.map((calc) => {
                       const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
                       const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
@@ -186,39 +221,40 @@ function formatDate(date: Date | null): string {
                       return (
                         <a 
                           href={quoteUrl || '#'}
-                          class={`calculation-card block rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all cursor-pointer ${quoteUrl ? '' : 'pointer-events-none opacity-60'} ${isApproved ? 'bg-emerald-500/15 hover:bg-emerald-500/25' : 'bg-white/5 hover:bg-white/10'}`}
+                          class={`calculation-card block rounded-lg p-4 transition-all ${quoteUrl ? 'cursor-pointer' : 'pointer-events-none opacity-60'} ${isApproved ? 'bg-[#22c55e]/10 hover:bg-[#22c55e]/20 border border-[#22c55e]/30' : 'bg-[#1a1a1a] hover:bg-[#2a2a2a]'}`}
                           data-status={calc.approvalStatus}
                         >
-                          <div class="flex items-center justify-between gap-2">
+                          <div class="flex items-center justify-between gap-4">
                             <div class="flex-1 min-w-0">
-                              <div class="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                                <span class="text-base sm:text-lg">{isApproved ? '✅' : '💰'}</span>
-                                {isApproved ? (
-                                  <span class="px-1.5 sm:px-2 py-0.5 bg-emerald-500 text-white text-[10px] sm:text-xs font-bold rounded-full">
-                                    SCHVÁLENÉ
-                                  </span>
-                                ) : (
-                                  <span class={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${status.color} ${status.bgColor}`}>
-                                    {status.label}
-                                  </span>
-                                )}
+                              <div class="flex items-center gap-2 mb-1">
+                                <span class={`px-2.5 py-1 rounded-md text-xs font-medium ${status.cssClass}`}>
+                                  {status.label}
+                                </span>
                               </div>
-                              <h4 class={`text-sm sm:text-base font-medium truncate ${isApproved ? 'text-emerald-100' : 'text-white'}`}>{calc.name}</h4>
-                              <div class="text-[10px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1">📅 {formatDate(calc.updatedAt)}</div>
+                              <h4 class={`font-medium truncate ${isApproved ? 'text-[#4ade80]' : 'text-white'}`}>{calc.name}</h4>
+                              <div class="text-xs text-[#6b7280] mt-1 flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                  <line x1="16" y1="2" x2="16" y2="6"/>
+                                  <line x1="8" y1="2" x2="8" y2="6"/>
+                                  <line x1="3" y1="10" x2="21" y2="10"/>
+                                </svg>
+                                {formatDate(calc.updatedAt)}
+                              </div>
                             </div>
                             
-                            <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                            <div class="flex items-center gap-3 flex-shrink-0">
                               {calc.totalPrice && calc.totalPrice > 0 && (
-                                <div class={`text-sm sm:text-lg font-bold ${isApproved ? 'text-emerald-300' : 'text-emerald-400'}`}>
+                                <div class={`text-lg font-bold ${isApproved ? 'text-[#4ade80]' : 'text-[#f59e0b]'}`}>
                                   {calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 0 })} €
                                 </div>
                               )}
-                              {quoteUrl ? (
-                                <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                </svg>
-                              ) : (
-                                <span class="text-[10px] sm:text-xs text-slate-500">⏳</span>
+                              {quoteUrl && (
+                                <div class="w-8 h-8 rounded-full bg-[#1a1a1a] flex items-center justify-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="9 18 15 12 9 6"/>
+                                  </svg>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -234,24 +270,29 @@ function formatDate(date: Date | null): string {
           {/* Unassigned calculations */}
           {unassignedCalcs.length > 0 && (
             <details 
-              class="project-group glass rounded-xl sm:rounded-2xl overflow-hidden animate-fade-in-up"
+              class="project-group adsun-card overflow-hidden animate-fade-in-up"
               open
             >
-              <summary class="flex items-center justify-between p-3 sm:p-5 cursor-pointer hover:bg-white/5 transition-colors">
-                <div class="flex items-center gap-2 sm:gap-4">
-                  <span class="text-xl sm:text-2xl">📋</span>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-[#1a1a1a] transition-colors">
+                <div class="flex items-center gap-4">
+                  <div class="w-10 h-10 rounded-lg bg-[#6b7280]/10 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                  </div>
                   <div>
-                    <h3 class="text-sm sm:text-lg font-semibold text-white">Nezaradené ponuky</h3>
-                    <div class="text-xs sm:text-sm text-slate-400">{unassignedCalcs.length} ponúk bez projektu</div>
+                    <h3 class="text-lg font-semibold text-white">Nezaradené ponuky</h3>
+                    <div class="text-sm text-[#9ca3af]">{unassignedCalcs.length} ponúk bez projektu</div>
                   </div>
                 </div>
-                <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 transition-transform project-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                <svg class="w-5 h-5 text-[#6b7280] transition-transform project-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"/>
                 </svg>
               </summary>
               
-              <div class="border-t border-white/10 bg-black/20">
-                <div class="p-2 sm:p-4 space-y-2 sm:space-y-3">
+              <div class="border-t border-[#2a2a2a] bg-[#0f0f0f]">
+                <div class="p-4 space-y-3">
                   {unassignedCalcs.map((calc) => {
                     const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
                     const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
@@ -260,39 +301,30 @@ function formatDate(date: Date | null): string {
                     return (
                       <a 
                         href={quoteUrl || '#'}
-                        class={`calculation-card block rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all cursor-pointer ${quoteUrl ? '' : 'pointer-events-none opacity-60'} ${isApproved ? 'bg-emerald-500/15 hover:bg-emerald-500/25' : 'bg-white/5 hover:bg-white/10'}`}
+                        class={`calculation-card block rounded-lg p-4 transition-all ${quoteUrl ? 'cursor-pointer' : 'pointer-events-none opacity-60'} ${isApproved ? 'bg-[#22c55e]/10 hover:bg-[#22c55e]/20 border border-[#22c55e]/30' : 'bg-[#1a1a1a] hover:bg-[#2a2a2a]'}`}
                         data-status={calc.approvalStatus}
                       >
-                        <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center justify-between gap-4">
                           <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                              <span class="text-base sm:text-lg">{isApproved ? '✅' : '💰'}</span>
-                              {isApproved ? (
-                                <span class="px-1.5 sm:px-2 py-0.5 bg-emerald-500 text-white text-[10px] sm:text-xs font-bold rounded-full">
-                                  SCHVÁLENÉ
-                                </span>
-                              ) : (
-                                <span class={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${status.color} ${status.bgColor}`}>
-                                  {status.label}
-                                </span>
-                              )}
+                            <div class="flex items-center gap-2 mb-1">
+                              <span class={`px-2.5 py-1 rounded-md text-xs font-medium ${status.cssClass}`}>
+                                {status.label}
+                              </span>
                             </div>
-                            <h4 class={`text-sm sm:text-base font-medium truncate ${isApproved ? 'text-emerald-100' : 'text-white'}`}>{calc.name}</h4>
-                            <div class="text-[10px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1">📅 {formatDate(calc.updatedAt)}</div>
+                            <h4 class={`font-medium truncate ${isApproved ? 'text-[#4ade80]' : 'text-white'}`}>{calc.name}</h4>
+                            <div class="text-xs text-[#6b7280] mt-1">{formatDate(calc.updatedAt)}</div>
                           </div>
                           
-                          <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                          <div class="flex items-center gap-3 flex-shrink-0">
                             {calc.totalPrice && calc.totalPrice > 0 && (
-                              <div class={`text-sm sm:text-lg font-bold ${isApproved ? 'text-emerald-300' : 'text-emerald-400'}`}>
+                              <div class={`text-lg font-bold ${isApproved ? 'text-[#4ade80]' : 'text-[#f59e0b]'}`}>
                                 {calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 0 })} €
                               </div>
                             )}
-                            {quoteUrl ? (
-                              <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                            {quoteUrl && (
+                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 18 15 12 9 6"/>
                               </svg>
-                            ) : (
-                              <span class="text-[10px] sm:text-xs text-slate-500">⏳</span>
                             )}
                           </div>
                         </div>
@@ -311,36 +343,36 @@ function formatDate(date: Date | null): string {
 
 <style>
   .filter-btn {
-    background: rgba(255, 255, 255, 0.05);
-    color: #94a3b8;
+    background: rgba(26, 26, 26, 0.8);
+    color: #9ca3af;
     border: 1px solid transparent;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    white-space: nowrap;
   }
   
   .filter-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e2e8f0;
+    background: rgba(42, 42, 42, 0.8);
+    color: #ffffff;
+    border-color: rgba(245, 158, 11, 0.3);
   }
   
   .filter-btn.active {
-    background: #0552b5;
-    color: white;
-    border-color: #0967d2;
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.5);
   }
   
-  .line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
   
-  .loading-spinner {
-    animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
   
   /* Project accordion */
@@ -387,110 +419,4 @@ function formatDate(date: Date | null): string {
       updateFilters();
     });
   });
-  
-  // Load more functionality
-  const loadMoreBtn = document.getElementById('loadMoreBtn') as HTMLButtonElement | null;
-  const container = document.getElementById('calculationsContainer');
-  
-  if (loadMoreBtn && container) {
-    loadMoreBtn.addEventListener('click', async () => {
-      const offset = parseInt(loadMoreBtn.dataset.offset || '20');
-      
-      loadMoreBtn.disabled = true;
-      loadMoreBtn.innerHTML = '<span class="loading-spinner inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full"></span> Načítavam...';
-      
-      try {
-        const url = `/api/calculations?offset=${offset}&limit=20`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.items && data.items.length > 0) {
-          // Render new items
-          for (const calc of data.items) {
-            const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
-            const hasShareLink = calc.shareToken && calc.shareExpiresAt && new Date(calc.shareExpiresAt) > new Date();
-            
-            const card = document.createElement('div');
-            card.className = isApproved 
-              ? 'calculation-card rounded-2xl p-6 transition-all animate-fade-in-up bg-emerald-500/20 border-2 border-emerald-500/50 hover:bg-emerald-500/25'
-              : 'calculation-card rounded-2xl p-6 transition-all animate-fade-in-up glass hover:bg-white/5';
-            card.dataset.status = calc.approvalStatus;
-            
-            card.innerHTML = `
-              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div class="flex-1">
-                  <div class="flex items-center gap-3 mb-2">
-                    <span class="text-2xl">${isApproved ? '✅' : '💰'}</span>
-                    <div>
-                      <div class="flex items-center gap-2 mb-1">
-                        <span class="font-mono text-xs text-blue-400">${calc.calculationNumber}</span>
-                        ${isApproved 
-                          ? '<span class="px-2 py-0.5 bg-emerald-500 text-white text-xs font-bold rounded-full">SCHVÁLENÉ</span>'
-                          : `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${calc.approvalStatus === 'CLIENT_VIEWED' ? 'text-amber-400 bg-amber-500/20' : 'text-slate-400 bg-slate-500/20'}">${calc.approvalStatus === 'CLIENT_VIEWED' ? 'Čaká na schválenie' : 'V príprave'}</span>`
-                        }
-                      </div>
-                      <h3 class="text-lg font-semibold ${isApproved ? 'text-emerald-100' : 'text-white'}">${calc.name}</h3>
-                    </div>
-                  </div>
-                  ${isApproved ? `
-                    <div class="mt-3 flex items-center gap-2 text-sm text-emerald-300">
-                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                      </svg>
-                      <span>Táto cenová ponuka bola schválená. Zákazka je v realizácii.</span>
-                    </div>
-                  ` : ''}
-                </div>
-                <div class="flex items-center gap-4">
-                  ${calc.totalPrice ? `
-                    <div class="text-right">
-                      <div class="text-xl font-bold ${isApproved ? 'text-emerald-300' : 'text-emerald-400'}">
-                        ${calc.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
-                      </div>
-                      <div class="text-xs text-slate-400">Celková cena</div>
-                    </div>
-                  ` : ''}
-                  ${hasShareLink ? `
-                    <a 
-                      href="https://app.adsun.sk/public/quote/${calc.id}/${calc.shareToken}"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all shadow-lg ${isApproved ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20' : 'bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white shadow-primary-600/20'}"
-                    >
-                      <span>${isApproved ? 'Detail ponuky' : 'Zobraziť ponuku'}</span>
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-                  ` : ''}
-                </div>
-              </div>
-            `;
-            
-            // Insert before load more button container
-            loadMoreBtn.parentElement?.parentElement?.insertBefore(card, loadMoreBtn.parentElement);
-          }
-          
-          // Update button
-          const newOffset = offset + data.items.length;
-          if (data.hasMore) {
-            const remaining = data.total - newOffset;
-            loadMoreBtn.dataset.offset = newOffset.toString();
-            loadMoreBtn.innerHTML = `Načítať viac (${remaining} zostáva)`;
-            loadMoreBtn.disabled = false;
-          } else {
-            loadMoreBtn.parentElement?.remove();
-          }
-          
-          // Reapply filters
-          updateFilters();
-        }
-      } catch (error) {
-        console.error('Error loading more:', error);
-        loadMoreBtn.innerHTML = 'Chyba, skúste znova';
-        loadMoreBtn.disabled = false;
-      }
-    });
-  }
 </script>

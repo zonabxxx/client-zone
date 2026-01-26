@@ -1,120 +1,177 @@
 @import "tailwindcss";
 
-/* Custom theme colors for Tailwind v4 */
+/* ADSUN Theme - Custom colors */
 @theme {
-  /* Primary - Deep ocean blue */
-  --color-primary-50: #e6f4ff;
-  --color-primary-100: #bae3ff;
-  --color-primary-200: #7cc4fa;
-  --color-primary-300: #47a3f3;
-  --color-primary-400: #2186eb;
-  --color-primary-500: #0967d2;
-  --color-primary-600: #0552b5;
-  --color-primary-700: #03449e;
-  --color-primary-800: #01337d;
-  --color-primary-900: #002159;
-
-  /* Accent - Vibrant coral */
-  --color-accent-400: #ff7849;
-  --color-accent-500: #f35627;
-  --color-accent-600: #de3a11;
-
-  /* Success - Fresh mint */
-  --color-success-400: #36d399;
+  /* Primary - ADSUN Orange */
+  --color-adsun-orange: #f59e0b;
+  --color-adsun-orange-light: #fbbf24;
+  --color-adsun-orange-dark: #d97706;
+  
+  /* Background - Deep Black */
+  --color-adsun-black: #0a0a0a;
+  --color-adsun-dark: #111111;
+  --color-adsun-gray: #1a1a1a;
+  --color-adsun-gray-light: #2a2a2a;
+  
+  /* Text colors */
+  --color-adsun-white: #ffffff;
+  --color-adsun-muted: #9ca3af;
+  
+  /* Status colors */
+  --color-success-400: #34d399;
   --color-success-500: #22c55e;
-  --color-success-600: #16a34a;
-
-  /* Warning - Golden amber */
   --color-warning-400: #fbbf24;
   --color-warning-500: #f59e0b;
-  --color-warning-600: #d97706;
+  --color-error-400: #f87171;
+  --color-error-500: #ef4444;
+  --color-info-400: #60a5fa;
+  --color-info-500: #3b82f6;
 }
 
 html {
-  background: #020617;
+  background: #0a0a0a;
   overflow-x: hidden;
 }
 
 body {
   font-family: 'Outfit', system-ui, -apple-system, sans-serif;
-  background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #002159 100%);
+  background: #0a0a0a;
   min-height: 100vh;
-  min-height: 100dvh; /* Dynamic viewport height for mobile */
-  color: #f1f5f9;
+  min-height: 100dvh;
+  color: #ffffff;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overscroll-behavior: none; /* Prevent overscroll bounce */
-  overscroll-behavior-y: none;
+  overscroll-behavior: none;
   overflow-x: hidden;
 }
 
-/* Animated gradient background */
-.bg-gradient-animated {
-  background: linear-gradient(
-    -45deg,
-    #020617,
-    #0f172a,
-    #002159,
-    #01337d
-  );
-  background-size: 400% 400%;
-  animation: gradient 15s ease infinite;
+/* Geometric lines decoration - ADSUN style */
+.geometric-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
 }
 
-@keyframes gradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+.geometric-bg::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: 
+    linear-gradient(45deg, transparent 45%, rgba(245, 158, 11, 0.03) 45%, rgba(245, 158, 11, 0.03) 55%, transparent 55%),
+    linear-gradient(-45deg, transparent 45%, rgba(245, 158, 11, 0.03) 45%, rgba(245, 158, 11, 0.03) 55%, transparent 55%),
+    linear-gradient(135deg, transparent 48%, rgba(245, 158, 11, 0.05) 48%, rgba(245, 158, 11, 0.05) 52%, transparent 52%);
+  background-size: 60px 60px, 60px 60px, 80px 80px;
+  animation: moveLines 20s linear infinite;
 }
 
-/* Glass morphism effect */
-.glass {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+.geometric-lines {
+  position: absolute;
+  inset: 0;
+  background: 
+    linear-gradient(30deg, transparent 49.5%, rgba(245, 158, 11, 0.08) 49.5%, rgba(245, 158, 11, 0.08) 50.5%, transparent 50.5%),
+    linear-gradient(-30deg, transparent 49.5%, rgba(245, 158, 11, 0.06) 49.5%, rgba(245, 158, 11, 0.06) 50.5%, transparent 50.5%),
+    linear-gradient(60deg, transparent 49.5%, rgba(245, 158, 11, 0.04) 49.5%, rgba(245, 158, 11, 0.04) 50.5%, transparent 50.5%);
+  background-size: 100px 200px;
 }
 
-.glass-light {
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+@keyframes moveLines {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(60px, 60px); }
 }
 
-/* Glow effects */
-.glow-primary {
-  box-shadow: 0 0 20px rgba(9, 103, 210, 0.3),
-              0 0 40px rgba(9, 103, 210, 0.1);
+/* ADSUN Glass card effect */
+.adsun-card {
+  background: rgba(26, 26, 26, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+  transition: all 0.3s ease;
 }
 
-.glow-success {
-  box-shadow: 0 0 20px rgba(34, 197, 94, 0.3),
-              0 0 40px rgba(34, 197, 94, 0.1);
+.adsun-card:hover {
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.1);
 }
 
-.glow-accent {
-  box-shadow: 0 0 20px rgba(243, 86, 39, 0.3),
-              0 0 40px rgba(243, 86, 39, 0.1);
+.adsun-card-active {
+  border-color: rgba(245, 158, 11, 0.8);
+  box-shadow: 0 0 40px rgba(245, 158, 11, 0.15);
 }
 
-/* Custom scrollbar */
+/* ADSUN Button styles */
+.btn-adsun-primary {
+  background: #f59e0b;
+  color: #0a0a0a;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-adsun-primary:hover {
+  background: #fbbf24;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+}
+
+.btn-adsun-secondary {
+  background: transparent;
+  color: #ffffff;
+  font-weight: 500;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+}
+
+.btn-adsun-secondary:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.btn-adsun-outline {
+  background: transparent;
+  color: #f59e0b;
+  font-weight: 500;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+  border: 2px solid #f59e0b;
+  cursor: pointer;
+}
+
+.btn-adsun-outline:hover {
+  background: #f59e0b;
+  color: #0a0a0a;
+}
+
+/* Custom scrollbar - ADSUN style */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #111111;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 4px;
+  background: #333333;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #f59e0b;
 }
 
 /* Monospace for order numbers */
@@ -134,12 +191,23 @@ body {
   }
 }
 
-@keyframes pulse-glow {
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-orange {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(9, 103, 210, 0.3);
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
   }
   50% {
-    box-shadow: 0 0 40px rgba(9, 103, 210, 0.5);
+    box-shadow: 0 0 40px rgba(245, 158, 11, 0.4);
   }
 }
 
@@ -147,87 +215,156 @@ body {
   animation: fadeInUp 0.5s ease-out forwards;
 }
 
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
+.animate-fade-in-left {
+  animation: fadeInLeft 0.5s ease-out forwards;
+}
+
+.animate-pulse-orange {
+  animation: pulse-orange 2s ease-in-out infinite;
 }
 
 /* Staggered animations */
-.stagger-1 { animation-delay: 0.1s; }
-.stagger-2 { animation-delay: 0.2s; }
-.stagger-3 { animation-delay: 0.3s; }
-.stagger-4 { animation-delay: 0.4s; }
-.stagger-5 { animation-delay: 0.5s; }
+.stagger-1 { animation-delay: 0.1s; opacity: 0; }
+.stagger-2 { animation-delay: 0.2s; opacity: 0; }
+.stagger-3 { animation-delay: 0.3s; opacity: 0; }
+.stagger-4 { animation-delay: 0.4s; opacity: 0; }
+.stagger-5 { animation-delay: 0.5s; opacity: 0; }
 
-/* Status badge styles */
-.status-draft { background: #475569; color: #e2e8f0; }
-.status-confirmed { background: #0552b5; color: white; }
-.status-in-progress { background: #f59e0b; color: #0f172a; }
-.status-completed { background: #22c55e; color: white; }
-.status-cancelled { background: #475569; color: #cbd5e1; }
+/* Status badge styles - ADSUN */
+.status-draft { 
+  background: #374151; 
+  color: #d1d5db; 
+}
+.status-confirmed { 
+  background: rgba(59, 130, 246, 0.2); 
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.status-in-progress { 
+  background: rgba(245, 158, 11, 0.2); 
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.status-completed { 
+  background: rgba(34, 197, 94, 0.2); 
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.status-cancelled { 
+  background: rgba(239, 68, 68, 0.2); 
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
 
-/* Priority indicators */
-.priority-low { border-left: 3px solid #64748b; }
-.priority-medium { border-left: 3px solid #0967d2; }
-.priority-high { border-left: 3px solid #f59e0b; }
-.priority-critical { border-left: 3px solid #f35627; }
+/* Progress bar - ADSUN style */
+.progress-bar {
+  background: #1a1a1a;
+  border-radius: 9999px;
+  overflow: hidden;
+  height: 8px;
+}
 
-/* Input styles */
+.progress-bar-fill {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.5s ease;
+}
+
+/* Divider with orange gradient */
+.divider-orange {
+  height: 3px;
+  background: linear-gradient(90deg, #f59e0b 0%, transparent 100%);
+  border: none;
+  margin: 1rem 0;
+}
+
+/* Orange text gradient */
+.text-gradient-orange {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Input styles - ADSUN */
 input[type="email"],
-input[type="text"] {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid #334155;
-  border-radius: 0.75rem;
+input[type="text"],
+input[type="password"],
+textarea {
+  background: #1a1a1a;
+  border: 1px solid #333333;
+  border-radius: 0.5rem;
   padding: 0.75rem 1rem;
   width: 100%;
-  color: #f1f5f9;
+  color: #ffffff;
   transition: all 0.2s;
 }
 
-input[type="email"]::placeholder,
-input[type="text"]::placeholder {
-  color: #94a3b8;
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280;
 }
 
-input[type="email"]:focus,
-input[type="text"]:focus {
+input:focus,
+textarea:focus {
   outline: none;
-  border-color: #0967d2;
-  box-shadow: 0 0 0 3px rgba(9, 103, 210, 0.2);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
 }
 
-/* Button styles */
-.btn-primary {
-  background: #0552b5;
-  color: white;
-  font-weight: 500;
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.75rem;
+/* Side navigation icon style */
+.side-nav-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
   transition: all 0.2s;
+  border-radius: 0.5rem;
 }
 
-.btn-primary:hover {
-  background: #0967d2;
+.side-nav-icon:hover {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
 }
 
-.btn-primary:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(9, 103, 210, 0.4);
+.side-nav-icon.active {
+  color: #f59e0b;
 }
 
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* Stats card number */
+.stats-number {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
-.btn-secondary {
-  background: rgba(51, 65, 85, 0.5);
-  color: #e2e8f0;
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.75rem;
-  transition: all 0.2s;
-  border: 1px solid #475569;
+.stats-number-orange {
+  color: #f59e0b;
 }
 
-.btn-secondary:hover {
-  background: rgba(71, 85, 105, 0.5);
+.stats-number-green {
+  color: #4ade80;
+}
+
+.stats-number-blue {
+  color: #60a5fa;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .side-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 0.75rem;
+    background: #111111;
+    border-top: 1px solid #2a2a2a;
+    z-index: 50;
+  }
 }

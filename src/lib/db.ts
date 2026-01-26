@@ -39,6 +39,31 @@ export interface Customer {
   organizationId: string;
 }
 
+// Customer Rating from FinStat integration
+export interface CustomerRating {
+  overallScore: number | null;        // 0-100
+  ratingClass: string | null;         // A+, A, B+, B, C+, C, D, E
+  riskLevel: string | null;           // NIZKE, STREDNE, VYSOKE, KRITICKE
+  riskScore: number | null;           // 0-100
+  financialScore: number | null;      // 0-100
+  stabilityScore: number | null;      // 0-100
+  ratingRecommendation: string | null;
+  ratingBadges: string[] | null;
+  ratingDetails: {
+    risks: string[];
+    strengths: string[];
+    concerns: string[];
+  } | null;
+  ratingLastUpdate: Date | null;
+  // Financial data
+  totalRevenue: number | null;
+  yearlyRevenue: number | null;
+  currentProfit: number | null;
+  // Payment info
+  paymentDisciplineRating: string | null;
+  customerCategory: string | null;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -1679,6 +1704,141 @@ export async function getQuoteBundleByToken(
   } catch (error) {
     console.error('Error getting quote bundle by token:', error);
     return null;
+  }
+}
+
+// Get customer rating data
+export async function getCustomerRating(customerId: string): Promise<CustomerRating | null> {
+  try {
+    const db = getClient();
+    const result = await db.execute({
+      sql: `
+        SELECT 
+          overall_rating as overallRating,
+          rating_class as ratingClass,
+          risk_level as riskLevel,
+          risk_score as riskScore,
+          financial_score as financialScore,
+          stability_score as stabilityScore,
+          rating_recommendation as ratingRecommendation,
+          rating_badges as ratingBadges,
+          rating_details as ratingDetails,
+          rating_last_update as ratingLastUpdate,
+          total_revenue as totalRevenue,
+          yearly_revenue as yearlyRevenue,
+          current_profit as currentProfit,
+          payment_discipline_rating as paymentDisciplineRating,
+          customer_category as customerCategory
+        FROM customers 
+        WHERE id = ?
+        LIMIT 1
+      `,
+      args: [customerId]
+    });
+    
+    if (result.rows.length === 0) return null;
+    
+    const row = result.rows[0];
+    
+    // Parse JSON fields
+    let ratingBadges: string[] | null = null;
+    if (row.ratingBadges) {
+      try {
+        ratingBadges = typeof row.ratingBadges === 'string' 
+          ? JSON.parse(row.ratingBadges) 
+          : row.ratingBadges as string[];
+      } catch { /* ignore */ }
+    }
+    
+    let ratingDetails: CustomerRating['ratingDetails'] = null;
+    if (row.ratingDetails) {
+      try {
+        ratingDetails = typeof row.ratingDetails === 'string' 
+          ? JSON.parse(row.ratingDetails) 
+          : row.ratingDetails as CustomerRating['ratingDetails'];
+      } catch { /* ignore */ }
+    }
+    
+    return {
+      overallScore: row.overallRating ? Number(row.overallRating) : null,
+      ratingClass: row.ratingClass as string | null,
+      riskLevel: row.riskLevel as string | null,
+      riskScore: row.riskScore ? Number(row.riskScore) : null,
+      financialScore: row.financialScore ? Number(row.financialScore) : null,
+      stabilityScore: row.stabilityScore ? Number(row.stabilityScore) : null,
+      ratingRecommendation: row.ratingRecommendation as string | null,
+      ratingBadges,
+      ratingDetails,
+      ratingLastUpdate: row.ratingLastUpdate ? new Date((row.ratingLastUpdate as number) * 1000) : null,
+      totalRevenue: row.totalRevenue ? Number(row.totalRevenue) : null,
+      yearlyRevenue: row.yearlyRevenue ? Number(row.yearlyRevenue) : null,
+      currentProfit: row.currentProfit ? Number(row.currentProfit) : null,
+      paymentDisciplineRating: row.paymentDisciplineRating as string | null,
+      customerCategory: row.customerCategory as string | null,
+    };
+  } catch (error) {
+    console.error('Error getting customer rating:', error);
+    return null;
+  }
+}
+
+// Global Client Rating from Pricing Rules (Tools)
+export interface GlobalClientRatingRule {
+  id: string;
+  ratingClass: string;  // 'A+', 'A', 'B+', 'B', 'C+', 'C', 'D', 'E'
+  multiplier: number;   // 0.82, 0.85, 1, 1.05, etc.
+  description: string;  // '10% zľava pre TOP klientov'
+  isDefault?: boolean;
+}
+
+// Get global client rating rules from pricing configuration
+export async function getGlobalClientRatingRules(organizationId: string): Promise<GlobalClientRatingRule[]> {
+  try {
+    const db = getClient();
+    
+    // Load from tools table where type = 'global_settings'
+    const result = await db.execute({
+      sql: `
+        SELECT config
+        FROM tools 
+        WHERE organization_id = ? AND type = 'global_settings'
+        LIMIT 1
+      `,
+      args: [organizationId]
+    });
+    
+    if (result.rows.length === 0) {
+      console.log('No global settings found for organization:', organizationId);
+      return [];
+    }
+    
+    const configRaw = result.rows[0].config;
+    if (!configRaw) return [];
+    
+    try {
+      // Config might be double-escaped JSON (string containing JSON string)
+      let config = configRaw;
+      
+      // First parse if it's a string
+      if (typeof config === 'string') {
+        config = JSON.parse(config);
+      }
+      
+      // Check if result is still a string (double-escaped case)
+      if (typeof config === 'string') {
+        config = JSON.parse(config);
+      }
+      
+      const globalClientRating = config.globalClientRating || [];
+      console.log('Loaded global client rating rules:', globalClientRating.length);
+      return globalClientRating as GlobalClientRatingRule[];
+    } catch (parseError) {
+      console.error('Error parsing global settings config:', parseError);
+      return [];
+    }
+  } catch (error) {
+    console.error('Error getting global client rating rules:', error);
+    return [];
   }
 }
 

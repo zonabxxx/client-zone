@@ -1,6 +1,6 @@
 ---
 interface Props {
-  active: 'orders' | 'quotes';
+  active: 'orders' | 'quotes' | 'products' | 'calculations';
 }
 
 const { active } = Astro.props;
@@ -8,6 +8,7 @@ const { active } = Astro.props;
 const navItems = [
   { id: 'orders', label: 'Zákazky', labelFull: 'Aktívne zákazky', href: '/dashboard', icon: '📦' },
   { id: 'quotes', label: 'Ponuky', labelFull: 'Cenové ponuky', href: '/quotes', icon: '💰' },
+  { id: 'products', label: 'Produkty', labelFull: 'Produktový katalóg', href: '/products', icon: '🛒' },
 ];
 ---
 

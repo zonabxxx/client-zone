@@ -1,0 +1,510 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getSessionFromCookie } from '../lib/session';
+import { getCustomerOrders, getCustomerRating, getGlobalClientRatingRules, type GlobalClientRatingRule } from '../lib/db';
+import { format } from 'date-fns';
+import { sk } from 'date-fns/locale';
+
+// Check authentication
+const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
+
+if (!session) {
+  return Astro.redirect('/');
+}
+
+// Get orders and rating
+const orders = await getCustomerOrders(session.customerId, session.customerName);
+const rating = await getCustomerRating(session.customerId);
+
+// 🎯 Load actual pricing rules from database (Tools -> Pricing Rules)
+const pricingRules = await getGlobalClientRatingRules(session.organizationId);
+
+// Calculate stats from orders
+const totalSpent = orders
+  .filter(o => o.status === 'COMPLETED')
+  .reduce((sum, o) => sum + (o.totalValue || 0), 0);
+const completedOrders = orders.filter(o => o.status === 'COMPLETED').length;
+
+// Helper to calculate discount from multiplier
+function getDiscountFromMultiplier(multiplier: number): number {
+  if (multiplier >= 1) return 0; // No discount, it's a markup
+  return Math.round((1 - multiplier) * 100); // e.g., 0.85 = 15% discount
+}
+
+// Helper to get markup from multiplier
+function getMarkupFromMultiplier(multiplier: number): number {
+  if (multiplier <= 1) return 0;
+  return Math.round((multiplier - 1) * 100); // e.g., 1.1 = 10% markup
+}
+
+// Default visual config for rating classes (colors/icons)
+const ratingVisualConfig: Record<string, { color: string; bgColor: string; icon: string }> = {
+  'A+': { color: '#22c55e', bgColor: 'from-[#22c55e] to-[#16a34a]', icon: '⭐' },
+  'A': { color: '#4ade80', bgColor: 'from-[#4ade80] to-[#22c55e]', icon: '🌟' },
+  'B+': { color: '#3b82f6', bgColor: 'from-[#3b82f6] to-[#2563eb]', icon: '💎' },
+  'B': { color: '#60a5fa', bgColor: 'from-[#60a5fa] to-[#3b82f6]', icon: '✨' },
+  'C+': { color: '#f59e0b', bgColor: 'from-[#f59e0b] to-[#d97706]', icon: '🔶' },
+  'C': { color: '#fbbf24', bgColor: 'from-[#fbbf24] to-[#f59e0b]', icon: '🔸' },
+  'D': { color: '#f97316', bgColor: 'from-[#f97316] to-[#ea580c]', icon: '⚠️' },
+  'E': { color: '#ef4444', bgColor: 'from-[#ef4444] to-[#dc2626]', icon: '🚨' },
+  'Unknown': { color: '#6b7280', bgColor: 'from-[#6b7280] to-[#4b5563]', icon: '❓' },
+  'DEFAULT': { color: '#6b7280', bgColor: 'from-[#6b7280] to-[#4b5563]', icon: '📋' },
+};
+
+// Build ratingConfig from actual pricing rules
+const ratingConfig: Record<string, { name: string; color: string; bgColor: string; icon: string; discount: number; multiplier: number; description: string; isDefault?: boolean }> = {};
+
+// If we have pricing rules from DB, use them
+if (pricingRules.length > 0) {
+  for (const rule of pricingRules) {
+    const visual = ratingVisualConfig[rule.ratingClass] || ratingVisualConfig['Unknown'];
+    ratingConfig[rule.ratingClass] = {
+      name: rule.ratingClass,
+      color: visual.color,
+      bgColor: visual.bgColor,
+      icon: visual.icon,
+      discount: getDiscountFromMultiplier(rule.multiplier),
+      multiplier: rule.multiplier,
+      description: rule.description,
+      isDefault: rule.isDefault,
+    };
+  }
+} else {
+  // Fallback to hardcoded defaults if no pricing rules configured
+  const fallbackRules = [
+    { ratingClass: 'A+', multiplier: 0.82, description: '18% zľava pre TOP klientov' },
+    { ratingClass: 'A', multiplier: 0.85, description: '15% zľava pre výborných klientov' },
+    { ratingClass: 'B+', multiplier: 0.86, description: '14% zľava pre dobrých klientov' },
+    { ratingClass: 'B', multiplier: 1.0, description: 'Štandardná cena' },
+    { ratingClass: 'C+', multiplier: 1.0, description: 'Štandardná cena' },
+    { ratingClass: 'C', multiplier: 1.05, description: '5% prirážka za riziko' },
+    { ratingClass: 'D', multiplier: 1.1, description: '10% prirážka za vysoké riziko' },
+    { ratingClass: 'E', multiplier: 1.15, description: '15% prirážka za kritické riziko' },
+  ];
+  for (const rule of fallbackRules) {
+    const visual = ratingVisualConfig[rule.ratingClass] || ratingVisualConfig['Unknown'];
+    ratingConfig[rule.ratingClass] = {
+      name: rule.ratingClass,
+      color: visual.color,
+      bgColor: visual.bgColor,
+      icon: visual.icon,
+      discount: getDiscountFromMultiplier(rule.multiplier),
+      multiplier: rule.multiplier,
+      description: rule.description,
+    };
+  }
+}
+
+const riskLevelConfig: Record<string, { label: string; color: string; bgColor: string }> = {
+  'NIZKE': { label: 'Nízke riziko', color: '#22c55e', bgColor: 'bg-green-500/20' },
+  'STREDNE': { label: 'Stredné riziko', color: '#f59e0b', bgColor: 'bg-orange-500/20' },
+  'VYSOKE': { label: 'Vysoké riziko', color: '#f97316', bgColor: 'bg-orange-600/20' },
+  'KRITICKE': { label: 'Kritické riziko', color: '#ef4444', bgColor: 'bg-red-500/20' },
+};
+
+// Check if rating has been calculated
+const hasRating = rating && (rating.ratingClass || rating.overallScore);
+
+// Get current rating config
+const currentRating = rating?.ratingClass || 'C';
+const ratingInfo = ratingConfig[currentRating] || ratingConfig['C'];
+const riskInfo = riskLevelConfig[rating?.riskLevel || 'NIZKE'] || riskLevelConfig['NIZKE'];
+
+// Format date helper
+function formatDate(date: Date | null): string {
+  if (!date) return '—';
+  try {
+    return format(date, 'd. MMM yyyy', { locale: sk });
+  } catch {
+    return '—';
+  }
+}
+
+// Available rewards based on rating
+const availableRewards = [
+  { id: 1, name: '5% zľava', requiredClass: ['C+', 'B', 'B+', 'A', 'A+'], icon: '🏷️', description: 'Jednorazová zľava na ďalšiu zákazku' },
+  { id: 2, name: 'Expresné spracovanie', requiredClass: ['B', 'B+', 'A', 'A+'], icon: '⚡', description: 'Prednostné spracovanie zákazky' },
+  { id: 3, name: 'Bezplatná konzultácia', requiredClass: ['B+', 'A', 'A+'], icon: '💬', description: '30min konzultácia s dizajnérom' },
+  { id: 4, name: '10% zľava', requiredClass: ['A', 'A+'], icon: '🎁', description: 'Jednorazová zľava na ďalšiu zákazku' },
+  { id: 5, name: 'Bezplatná montáž', requiredClass: ['A+'], icon: '🔧', description: 'Montáž zdarma (do 2h práce)' },
+  { id: 6, name: 'VIP priorita', requiredClass: ['A+'], icon: '⭐', description: 'Najvyššia priorita pri všetkých zákazkách' },
+];
+---
+
+<Layout title="ADSUN Rewards" activeNav="rewards">
+  <main class="min-h-screen pb-24 md:pb-8">
+    <!-- Header -->
+    <header class="px-6 py-8 md:px-8">
+      <div class="max-w-6xl mx-auto">
+        <!-- Breadcrumb -->
+        <div class="flex items-center gap-2 text-sm text-[#6b7280] mb-6">
+          <a href="/dashboard" class="hover:text-[#f59e0b] transition-colors flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            Domov
+          </a>
+        </div>
+        
+        <!-- Title section -->
+        <div>
+          <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">
+            <span class="text-gradient-orange">Môj</span> Rating
+          </h1>
+          <p class="text-[#9ca3af]">
+            Váš klientsky rating a dostupné výhody
+          </p>
+        </div>
+        
+        <!-- Orange divider -->
+        <hr class="divider-orange mt-6" />
+      </div>
+    </header>
+    
+    <div class="max-w-6xl mx-auto px-6 md:px-8">
+      {hasRating ? (
+        <>
+          <!-- Rating Card -->
+          <div class={`relative overflow-hidden rounded-3xl p-8 mb-8 bg-gradient-to-br ${ratingInfo.bgColor} animate-fade-in-up`}>
+            <div class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+            <div class="relative z-10">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <div class="flex items-center gap-4 mb-4">
+                    <div class="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center">
+                      <span class="text-5xl font-bold text-white">{currentRating}</span>
+                    </div>
+                    <div>
+                      <p class="text-sm text-white/70">Váš rating</p>
+                      <h2 class="text-3xl font-bold text-white">Trieda {ratingInfo.name}</h2>
+                      <span class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${riskInfo.bgColor} mt-1`} style={`color: ${riskInfo.color}`}>
+                        {riskInfo.label}
+                      </span>
+                    </div>
+                  </div>
+                  {rating.ratingRecommendation && (
+                    <p class="text-white/80 max-w-md">{rating.ratingRecommendation}</p>
+                  )}
+                </div>
+                <div class="text-center md:text-right">
+                  <div class="text-5xl font-bold text-white mb-1">{rating.overallScore || 0}</div>
+                  <p class="text-white/70">celkové skóre</p>
+                  {rating.ratingLastUpdate && (
+                    <p class="text-sm text-white/50 mt-2">
+                      Aktualizované: {formatDate(rating.ratingLastUpdate)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Score Breakdown -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="adsun-card p-6 animate-fade-in-up">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-2xl">💰</span>
+                <span class="text-2xl font-bold text-[#22c55e]">{rating.financialScore || 0}</span>
+              </div>
+              <div class="text-white font-medium">Finančné skóre</div>
+              <div class="w-full h-2 bg-[#1a1a1a] rounded-full mt-2 overflow-hidden">
+                <div class="h-full bg-[#22c55e] rounded-full transition-all" style={`width: ${rating.financialScore || 0}%`}></div>
+              </div>
+            </div>
+            <div class="adsun-card p-6 animate-fade-in-up" style="animation-delay: 0.1s">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-2xl">🏛️</span>
+                <span class="text-2xl font-bold text-[#3b82f6]">{rating.stabilityScore || 0}</span>
+              </div>
+              <div class="text-white font-medium">Stabilita</div>
+              <div class="w-full h-2 bg-[#1a1a1a] rounded-full mt-2 overflow-hidden">
+                <div class="h-full bg-[#3b82f6] rounded-full transition-all" style={`width: ${rating.stabilityScore || 0}%`}></div>
+              </div>
+            </div>
+            <div class="adsun-card p-6 animate-fade-in-up" style="animation-delay: 0.2s">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-2xl">⚡</span>
+                <span class="text-2xl font-bold" style={`color: ${riskInfo.color}`}>{rating.riskScore || 0}</span>
+              </div>
+              <div class="text-white font-medium">Rizikové skóre</div>
+              <div class="w-full h-2 bg-[#1a1a1a] rounded-full mt-2 overflow-hidden">
+                <div class="h-full rounded-full transition-all" style={`width: ${rating.riskScore || 0}%; background: ${riskInfo.color}`}></div>
+              </div>
+            </div>
+            <div class="adsun-card p-6 animate-fade-in-up" style="animation-delay: 0.3s">
+              {ratingInfo.multiplier && ratingInfo.multiplier < 1 ? (
+                <>
+                  <div class="text-3xl font-bold text-[#22c55e] mb-1">-{Math.round((1 - ratingInfo.multiplier) * 100)}%</div>
+                  <div class="text-white font-medium">Vaša zľava</div>
+                  <div class="text-[#6b7280] text-sm">Na všetky služby</div>
+                </>
+              ) : ratingInfo.multiplier && ratingInfo.multiplier > 1 ? (
+                <>
+                  <div class="text-3xl font-bold text-[#ef4444] mb-1">+{Math.round((ratingInfo.multiplier - 1) * 100)}%</div>
+                  <div class="text-white font-medium">Prirážka</div>
+                  <div class="text-[#6b7280] text-sm">Na všetky služby</div>
+                </>
+              ) : (
+                <>
+                  <div class="text-3xl font-bold text-[#f59e0b] mb-1">0%</div>
+                  <div class="text-white font-medium">Štandardná cena</div>
+                  <div class="text-[#6b7280] text-sm">Na všetky služby</div>
+                </>
+              )}
+            </div>
+          </div>
+          
+          <!-- Badges -->
+          {rating.ratingBadges && rating.ratingBadges.length > 0 && (
+            <div class="adsun-card p-6 mb-8 animate-fade-in-up">
+              <h3 class="text-lg font-bold text-white mb-4">Vaše označenia</h3>
+              <div class="flex flex-wrap gap-2">
+                {rating.ratingBadges.map((badge) => (
+                  <span class="px-3 py-1.5 bg-[#1a1a1a] rounded-full text-sm text-white border border-[#333]">
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <!-- Details Grid -->
+          {rating.ratingDetails && (
+            <div class="grid md:grid-cols-3 gap-4 mb-8">
+              {rating.ratingDetails.strengths && rating.ratingDetails.strengths.length > 0 && (
+                <div class="adsun-card p-6 animate-fade-in-up">
+                  <h3 class="text-lg font-bold text-[#22c55e] mb-4 flex items-center gap-2">
+                    <span>💪</span> Silné stránky
+                  </h3>
+                  <ul class="space-y-2">
+                    {rating.ratingDetails.strengths.map((strength) => (
+                      <li class="flex items-start gap-2 text-sm text-[#9ca3af]">
+                        <svg class="w-4 h-4 text-[#22c55e] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        {strength}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {rating.ratingDetails.concerns && rating.ratingDetails.concerns.length > 0 && (
+                <div class="adsun-card p-6 animate-fade-in-up" style="animation-delay: 0.1s">
+                  <h3 class="text-lg font-bold text-[#f59e0b] mb-4 flex items-center gap-2">
+                    <span>⚠️</span> Na zváženie
+                  </h3>
+                  <ul class="space-y-2">
+                    {rating.ratingDetails.concerns.map((concern) => (
+                      <li class="flex items-start gap-2 text-sm text-[#9ca3af]">
+                        <svg class="w-4 h-4 text-[#f59e0b] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="12" r="10"/>
+                          <line x1="12" y1="8" x2="12" y2="12"/>
+                          <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        {concern}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {rating.ratingDetails.risks && rating.ratingDetails.risks.length > 0 && (
+                <div class="adsun-card p-6 animate-fade-in-up" style="animation-delay: 0.2s">
+                  <h3 class="text-lg font-bold text-[#ef4444] mb-4 flex items-center gap-2">
+                    <span>🚨</span> Riziká
+                  </h3>
+                  <ul class="space-y-2">
+                    {rating.ratingDetails.risks.map((risk) => (
+                      <li class="flex items-start gap-2 text-sm text-[#9ca3af]">
+                        <svg class="w-4 h-4 text-[#ef4444] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                          <line x1="12" y1="9" x2="12" y2="13"/>
+                          <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        {risk}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <!-- Available Rewards -->
+          <div class="mb-8">
+            <h3 class="text-xl font-bold text-white mb-4">Dostupné výhody pre vašu triedu</h3>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {availableRewards.map((reward, index) => {
+                const isAvailable = reward.requiredClass.includes(currentRating);
+                return (
+                  <div 
+                    class={`adsun-card p-6 animate-fade-in-up ${isAvailable ? '' : 'opacity-40'}`}
+                    style={`animation-delay: ${index * 0.05}s`}
+                  >
+                    <div class="flex items-start justify-between mb-4">
+                      <span class="text-4xl">{reward.icon}</span>
+                      {isAvailable ? (
+                        <span class="px-2 py-1 bg-[#22c55e]/20 text-[#22c55e] rounded-full text-xs font-medium">
+                          ✓ Dostupné
+                        </span>
+                      ) : (
+                        <span class="px-2 py-1 bg-[#6b7280]/20 text-[#6b7280] rounded-full text-xs font-medium">
+                          Vyžaduje {reward.requiredClass[reward.requiredClass.length - 1]}+
+                        </span>
+                      )}
+                    </div>
+                    <h4 class="text-lg font-semibold text-white mb-2">{reward.name}</h4>
+                    <p class="text-[#6b7280] text-sm">{reward.description}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          
+          <!-- Financial Summary -->
+          <div class="adsun-card p-8 animate-fade-in-up">
+            <h3 class="text-xl font-bold text-white mb-6">Prehľad spolupráce</h3>
+            <div class="grid md:grid-cols-4 gap-6">
+              <div>
+                <div class="text-3xl font-bold text-white">{completedOrders}</div>
+                <div class="text-[#6b7280] text-sm">Dokončených zákaziek</div>
+              </div>
+              <div>
+                <div class="text-3xl font-bold text-[#f59e0b]">{totalSpent.toLocaleString('sk-SK')} €</div>
+                <div class="text-[#6b7280] text-sm">Celková hodnota zákaziek</div>
+              </div>
+              {rating.yearlyRevenue && (
+                <div>
+                  <div class="text-3xl font-bold text-[#3b82f6]">{rating.yearlyRevenue.toLocaleString('sk-SK')} €</div>
+                  <div class="text-[#6b7280] text-sm">Váš ročný obrat</div>
+                </div>
+              )}
+              {rating.customerCategory && (
+                <div>
+                  <div class="text-3xl font-bold text-[#8b5cf6]">{rating.customerCategory}</div>
+                  <div class="text-[#6b7280] text-sm">Kategória klienta</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        <!-- No rating data yet -->
+        <div class="adsun-card p-12 text-center animate-fade-in-up">
+          <div class="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-[#f59e0b]/30 to-[#f59e0b]/10 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <h2 class="text-3xl font-bold text-white mb-3">Rating sa pripravuje</h2>
+          <p class="text-[#9ca3af] mb-8 max-w-lg mx-auto text-lg">
+            Váš klientsky rating bude dostupný po spracovaní finančných údajov vašej spoločnosti. 
+            Rating sa aktualizuje automaticky na základe vašich obchodných aktivít a platobnej histórie.
+          </p>
+          
+          <!-- Info banner -->
+          <div class="bg-[#f59e0b]/10 border border-[#f59e0b]/30 rounded-2xl p-6 max-w-lg mx-auto mb-8">
+            <div class="flex items-start gap-4 text-left">
+              <div class="w-10 h-10 rounded-full bg-[#f59e0b]/20 flex items-center justify-center flex-shrink-0 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+              </div>
+              <div>
+                <h4 class="text-white font-semibold mb-1">Čo je klientsky rating?</h4>
+                <p class="text-[#9ca3af] text-sm">
+                  Rating hodnotí vašu spoľahlivosť a bonitu. Vyšší rating znamená lepšie podmienky, 
+                  zľavy a prioritné spracovanie zákaziek.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Stats bez ratingu -->
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-xl mx-auto">
+            <div class="adsun-card p-5">
+              <div class="text-3xl font-bold text-white">{completedOrders}</div>
+              <div class="text-[#6b7280] text-sm">Dokončených zákaziek</div>
+            </div>
+            <div class="adsun-card p-5">
+              <div class="text-3xl font-bold text-[#f59e0b]">{totalSpent.toLocaleString('sk-SK')} €</div>
+              <div class="text-[#6b7280] text-sm">Celková hodnota</div>
+            </div>
+            {rating?.customerCategory && (
+              <div class="adsun-card p-5 col-span-2 md:col-span-1">
+                <div class="text-xl font-bold text-[#3b82f6]">{rating.customerCategory}</div>
+                <div class="text-[#6b7280] text-sm">Kategória obratu</div>
+              </div>
+            )}
+          </div>
+          
+          <div class="flex flex-col sm:flex-row gap-4 justify-center mt-10">
+            <a href="/dashboard" class="btn-adsun-secondary inline-flex items-center justify-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+              Späť na dashboard
+            </a>
+            <a href="mailto:info@adsun.sk?subject=Otázka ohľadom ratingu" class="btn-adsun-primary inline-flex items-center justify-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+              </svg>
+              Kontaktovať ADSUN
+            </a>
+          </div>
+        </div>
+      )}
+      
+      <!-- All Rating Classes from Pricing Rules -->
+      <div class="adsun-card p-8 mt-8 animate-fade-in-up">
+        <h3 class="text-xl font-bold text-white mb-6">Všetky triedy ratingu</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-3 md:gap-4">
+          {Object.entries(ratingConfig)
+            .filter(([key]) => !['Unknown', 'DEFAULT'].includes(key)) // Filter out non-rating classes
+            .map(([key, config]) => {
+            const isCurrentClass = hasRating && key === currentRating;
+            const multiplier = config.multiplier || 1;
+            const isDiscount = multiplier < 1;
+            const isMarkup = multiplier > 1;
+            const percent = isDiscount 
+              ? Math.round((1 - multiplier) * 100) 
+              : isMarkup 
+                ? Math.round((multiplier - 1) * 100) 
+                : 0;
+            
+            return (
+              <div class={`relative p-3 md:p-4 rounded-xl border-2 transition-all text-center ${
+                isCurrentClass 
+                  ? 'border-[#f59e0b] bg-[#f59e0b]/10' 
+                  : 'border-[#1a1a1a] bg-[#111111]'
+              }`} title={config.description || ''}>
+                {isCurrentClass && (
+                  <div class="absolute -top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-[#f59e0b] text-[#0a0a0a] text-[8px] font-bold rounded-full whitespace-nowrap">
+                    VY
+                  </div>
+                )}
+                <div class="text-xl md:text-2xl font-bold mb-1" style={`color: ${config.color}`}>{key}</div>
+                {isDiscount ? (
+                  <div class="text-[10px] md:text-xs text-[#22c55e] font-medium">-{percent}% zľava</div>
+                ) : isMarkup ? (
+                  <div class="text-[10px] md:text-xs text-[#ef4444] font-medium">+{percent}% prirážka</div>
+                ) : (
+                  <div class="text-[10px] md:text-xs text-[#6b7280]">štandardná cena</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <p class="text-center text-[#6b7280] text-sm mt-6">
+          Rating sa automaticky aktualizuje na základe vašich finančných údajov a platobnej disciplíny.
+        </p>
+      </div>
+    </div>
+  </main>
+</Layout>

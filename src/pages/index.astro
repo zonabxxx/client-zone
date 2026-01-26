@@ -10,25 +10,27 @@ if (session) {
 }
 ---
 
-<Layout title="Prihlásenie">
+<Layout title="Prihlásenie" showNav={false}>
   <main class="min-h-screen flex items-center justify-center px-4 py-12">
     <div class="w-full max-w-md">
       <!-- Logo / Brand -->
       <div class="text-center mb-8 animate-fade-in-up">
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary-600/20 border border-primary-500/30 mb-6 glow-primary">
-          <svg class="w-10 h-10 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        </div>
-        <h1 class="text-3xl font-bold text-white mb-2">Klientský Portál</h1>
-        <p class="text-slate-400">Sledujte stav vašich zákaziek</p>
+        <a href="https://adsun.sk" class="inline-block mb-6">
+          <div class="w-20 h-20 bg-gradient-to-br from-[#f59e0b] to-[#d97706] rounded-2xl flex items-center justify-center shadow-lg shadow-[#f59e0b]/20">
+            <span class="text-[#0a0a0a] font-bold text-3xl">A</span>
+          </div>
+        </a>
+        <h1 class="text-3xl font-bold text-white mb-2">
+          <span class="text-gradient-orange">ADSUN</span> Klientský Portál
+        </h1>
+        <p class="text-[#9ca3af]">Sledujte stav vašich zákaziek v reálnom čase</p>
       </div>
 
       <!-- Login Card -->
-      <div class="glass rounded-3xl p-8 animate-fade-in-up stagger-1">
+      <div class="adsun-card p-8 animate-fade-in-up stagger-1">
         <form id="loginForm" class="space-y-6">
           <div>
-            <label for="email" class="block text-sm font-medium text-slate-300 mb-2">
+            <label for="email" class="block text-sm font-medium text-[#9ca3af] mb-2">
               Váš email
             </label>
             <input
@@ -42,22 +44,23 @@ if (session) {
             />
           </div>
 
-          <div id="errorMessage" class="hidden p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+          <div id="errorMessage" class="hidden p-4 rounded-lg bg-[#ef4444]/10 border border-[#ef4444]/30 text-[#f87171] text-sm">
           </div>
 
           <button
             type="submit"
-            class="btn-primary w-full flex items-center justify-center gap-2"
+            class="btn-adsun-primary w-full flex items-center justify-center gap-2"
           >
             <span>Prihlásiť sa</span>
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"/>
+              <polyline points="12 5 19 12 12 19"/>
             </svg>
           </button>
         </form>
 
-        <div class="mt-6 pt-6 border-t border-slate-700/50">
-          <p class="text-center text-slate-400 text-sm">
+        <div class="mt-6 pt-6 border-t border-[#2a2a2a]">
+          <p class="text-center text-[#6b7280] text-sm">
             Použite email, ktorý máte registrovaný u nás ako klient.
           </p>
         </div>
@@ -65,13 +68,44 @@ if (session) {
 
       <!-- Info cards -->
       <div class="mt-8 grid grid-cols-2 gap-4 animate-fade-in-up stagger-2">
-        <div class="glass-light rounded-2xl p-4 text-center">
-          <div class="text-2xl mb-2">📊</div>
-          <p class="text-sm text-slate-300">Prehľad zákaziek</p>
+        <div class="adsun-card p-4 text-center">
+          <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-[#f59e0b]/10 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            </svg>
+          </div>
+          <p class="text-sm text-white font-medium">Prehľad zákaziek</p>
+          <p class="text-xs text-[#6b7280] mt-1">Všetky objednávky na jednom mieste</p>
         </div>
-        <div class="glass-light rounded-2xl p-4 text-center">
-          <div class="text-2xl mb-2">⏱️</div>
-          <p class="text-sm text-slate-300">Stavy v reálnom čase</p>
+        <div class="adsun-card p-4 text-center">
+          <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-[#f59e0b]/10 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <p class="text-sm text-white font-medium">Stavy v reálnom čase</p>
+          <p class="text-xs text-[#6b7280] mt-1">Sledujte priebeh zákaziek</p>
+        </div>
+      </div>
+      
+      <!-- Contact info -->
+      <div class="mt-8 text-center animate-fade-in-up stagger-3">
+        <p class="text-[#6b7280] text-sm mb-3">Potrebujete pomoc?</p>
+        <div class="flex justify-center gap-4">
+          <a href="tel:+421903222751" class="text-[#f59e0b] hover:text-[#fbbf24] transition-colors text-sm flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+            +421 903 222 751
+          </a>
+          <a href="mailto:info@adsun.sk" class="text-[#f59e0b] hover:text-[#fbbf24] transition-colors text-sm flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            info@adsun.sk
+          </a>
         </div>
       </div>
     </div>
