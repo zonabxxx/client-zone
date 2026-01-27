@@ -31,6 +31,7 @@ export function getClient(): Client {
 // Types for our queries
 export interface Customer {
   id: string;
+  entityId: string; // entityId from customers table - used for product template matching
   name: string;
   email: string | null;
   contactEmail: string | null;
@@ -154,7 +155,7 @@ export async function findCustomerByEmail(email: string): Promise<Customer | nul
     const db = getClient();
     const result = await db.execute({
       sql: `
-        SELECT id, name, email, contact_email as contactEmail, business_name as businessName, 
+        SELECT id, entity_id as entityId, name, email, contact_email as contactEmail, business_name as businessName, 
                phone, organization_id as organizationId
         FROM customers 
         WHERE LOWER(email) = LOWER(?) OR LOWER(contact_email) = LOWER(?)
@@ -168,6 +169,7 @@ export async function findCustomerByEmail(email: string): Promise<Customer | nul
     const row = result.rows[0];
     return {
       id: row.id as string,
+      entityId: (row.entityId as string) || (row.id as string), // fallback to id if entityId is null
       name: row.name as string,
       email: row.email as string | null,
       contactEmail: row.contactEmail as string | null,

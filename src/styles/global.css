@@ -31,6 +31,8 @@
 html {
   background: #0a0a0a;
   overflow-x: hidden;
+  overflow-y: auto !important;
+  height: auto;
 }
 
 body {
@@ -38,11 +40,14 @@ body {
   background: #0a0a0a;
   min-height: 100vh;
   min-height: 100dvh;
+  height: auto;
   color: #ffffff;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overscroll-behavior: none;
+  overscroll-behavior-x: none;
   overflow-x: hidden;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Geometric lines decoration - ADSUN style */

@@ -5,6 +5,7 @@ const SESSION_COOKIE_NAME = 'client_session';
 
 export interface ClientSession {
   customerId: string;
+  customerEntityId: string; // entityId from customers table - used for product template matching
   customerName: string;
   email: string;
   organizationId: string;

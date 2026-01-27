@@ -2,7 +2,6 @@
 import Layout from '../layouts/Layout.astro';
 import { getSessionFromCookie } from '../lib/session';
 import DashboardHeader from '../components/DashboardHeader.astro';
-import Navigation from '../components/Navigation.astro';
 
 const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
 
@@ -11,41 +10,101 @@ if (!session) {
 }
 ---
 
-<Layout title="Produktový katalóg">
-  <main class="min-h-screen">
+<Layout title="Produktový katalóg" activeNav="products">
+  <main class="pb-40">
     <DashboardHeader customerName={session.customerName} />
     
-    <div class="max-w-6xl mx-auto px-4 py-8">
-      <Navigation active="products" />
+    <div class="max-w-7xl mx-auto px-4 py-8">
       
       <!-- Header -->
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-white mb-2">
-          <span class="text-gradient-blue">Produktový</span> katalóg
+          <span class="text-gradient-orange">Produktový</span> katalóg
         </h1>
-        <p class="text-slate-400">Vyberte si z našej ponuky produktov a požiadajte o cenovú ponuku</p>
+        <p class="text-slate-400">Vyberte produkty a pridajte ich do košíka pre dopyt</p>
       </div>
 
-      <!-- Search and filters -->
-      <div class="flex flex-col sm:flex-row gap-4 mb-8">
+      <!-- Search and Category Filter -->
+      <div class="flex flex-col lg:flex-row gap-6 mb-8">
+        <!-- Category sidebar -->
+        <div class="lg:w-64 flex-shrink-0 space-y-4">
+          <!-- Favorites section -->
+          <div id="favoritesSection" class="hidden glass rounded-2xl p-4 border border-[#f59e0b]/30 bg-gradient-to-br from-[#f59e0b]/5 to-transparent">
+            <h3 class="text-sm font-semibold text-[#f59e0b] uppercase tracking-wider mb-3 flex items-center gap-2">
+              <span>⭐</span> Pre vás vybrané
+            </h3>
+            <div class="space-y-1">
+              <button 
+                id="showFavoritesBtn"
+                class="category-btn w-full text-left px-3 py-2 rounded-lg text-sm transition-colors hover:bg-[#f59e0b]/10"
+                data-favorites="true"
+              >
+                <span class="flex items-center justify-between">
+                  <span class="text-[#f59e0b]">🌟 Obľúbené produkty</span>
+                  <span id="favoritesCount" class="text-xs bg-[#f59e0b]/20 text-[#f59e0b] px-2 py-0.5 rounded-full">0</span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Categories section -->
+          <div class="glass rounded-2xl p-4">
+            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Kategórie</h3>
+            <div id="categoryFilter" class="space-y-1">
+              <div class="category-item group relative" data-category="">
+                <button 
+                  class="category-btn active w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all"
+                  data-category=""
+                >
+                  <span class="flex items-center gap-2">
+                    <span class="category-icon w-8 h-8 rounded-lg flex items-center justify-center text-base transition-transform group-hover:scale-110" style="background: rgba(100, 116, 139, 0.2);">
+                      📋
+                    </span>
+                    <span class="flex-1">
+                      <span class="block font-medium">Všetky produkty</span>
+                      <span class="block text-xs text-slate-500 group-hover:text-slate-400 transition-colors">Kompletný katalóg</span>
+                    </span>
+                    <span id="allProductsCount" class="text-xs bg-slate-700 px-2 py-0.5 rounded-full">-</span>
+                  </span>
+                </button>
+              </div>
+              <!-- Categories will be rendered here dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Main content -->
         <div class="flex-1">
+          <!-- Search -->
+          <div class="mb-6">
           <div class="relative">
             <input
               type="text"
               id="searchInput"
               placeholder="Hľadať produkty..."
-              class="w-full px-4 py-3 pl-12 rounded-xl bg-slate-800/50 border border-slate-700 text-white placeholder-slate-500 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all"
+                class="w-full px-4 py-3 pl-12 rounded-xl bg-slate-800/50 border border-slate-700 text-white placeholder-slate-500 focus:border-[#f59e0b] focus:ring-2 focus:ring-[#f59e0b]/20 outline-none transition-all"
             />
             <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
         </div>
+
+          <!-- Active category badge -->
+          <div id="activeCategoryBadge" class="hidden mb-4">
+            <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#f59e0b]/10 border border-[#f59e0b]/30 text-[#f59e0b]">
+              <span id="activeCategoryName">Kategória</span>
+              <button id="clearCategory" class="hover:bg-[#f59e0b]/20 rounded-full p-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </span>
       </div>
 
       <!-- Loading state -->
       <div id="loadingState" class="text-center py-16">
-        <div class="inline-block w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <div class="inline-block w-12 h-12 border-4 border-[#f59e0b] border-t-transparent rounded-full animate-spin mb-4"></div>
         <p class="text-slate-400">Načítavam produkty...</p>
       </div>
 
@@ -57,22 +116,121 @@ if (!session) {
       </div>
 
       <!-- Products grid -->
-      <div id="productsGrid" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div id="productsGrid" class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         <!-- Products will be rendered here -->
       </div>
 
       <!-- Pagination -->
-      <div id="pagination" class="hidden flex justify-center gap-2 mt-8">
-        <button id="prevPage" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <div id="pagination" class="hidden flex justify-center items-center gap-4 mt-8 py-4">
+            <button id="prevPage" class="px-6 py-3 rounded-xl bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium">
           ← Predošlá
         </button>
-        <span id="pageInfo" class="px-4 py-2 text-slate-400"></span>
-        <button id="nextPage" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <span id="pageInfo" class="px-4 py-2 text-slate-400 font-medium"></span>
+            <button id="nextPage" class="px-6 py-3 rounded-xl bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium">
           Ďalšia →
         </button>
+          </div>
+        </div>
       </div>
     </div>
   </main>
+
+  <!-- Floating Cart Button -->
+  <div id="floatingCart" class="fixed bottom-6 right-6 z-40 hidden">
+    <button 
+      id="openCartBtn"
+      class="flex items-center gap-3 px-6 py-4 rounded-2xl bg-gradient-to-r from-[#f59e0b] to-[#d97706] text-white font-semibold shadow-lg shadow-[#f59e0b]/30 hover:shadow-[#f59e0b]/50 transition-all hover:scale-105"
+    >
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+      <span>Košík (<span id="cartCount">0</span>)</span>
+      <span id="cartTotal" class="text-white/80">0 €</span>
+    </button>
+  </div>
+
+  <!-- Cart Drawer -->
+  <div id="cartDrawer" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" id="cartOverlay"></div>
+    <div class="absolute right-0 top-0 bottom-0 w-full max-w-lg bg-[#0f0f0f] border-l border-[#2a2a2a] shadow-2xl animate-slide-in-right">
+      <!-- Cart Header -->
+      <div class="flex items-center justify-between p-6 border-b border-[#2a2a2a]">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-[#f59e0b]/10 flex items-center justify-center">
+            <svg class="w-5 h-5 text-[#f59e0b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+          <h2 class="text-xl font-bold text-white">Váš košík</h2>
+        </div>
+        <button id="closeCartBtn" class="w-10 h-10 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Cart Items -->
+      <div id="cartItems" class="flex-1 overflow-y-auto p-6 space-y-4" style="max-height: calc(100vh - 280px);">
+        <!-- Cart items will be rendered here -->
+      </div>
+
+      <!-- Empty Cart State -->
+      <div id="emptyCartState" class="hidden p-12 text-center">
+        <div class="text-6xl mb-4">🛒</div>
+        <h3 class="text-xl font-semibold text-white mb-2">Košík je prázdny</h3>
+        <p class="text-slate-400">Pridajte produkty z katalógu do košíka</p>
+      </div>
+
+      <!-- Cart Footer -->
+      <div id="cartFooter" class="absolute bottom-0 left-0 right-0 p-6 border-t border-[#2a2a2a] bg-[#0f0f0f]">
+        <!-- Note input -->
+        <div class="mb-4">
+          <label class="block text-sm text-slate-400 mb-2">Poznámka k dopytu (voliteľné)</label>
+          <textarea 
+            id="cartNote" 
+            rows="2"
+            placeholder="Napíšte špeciálne požiadavky..."
+            class="w-full px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700 text-white placeholder-slate-500 focus:border-[#f59e0b] focus:ring-2 focus:ring-[#f59e0b]/20 outline-none transition-all resize-none"
+          ></textarea>
+        </div>
+
+        <!-- Total -->
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-slate-400">Celkom (orientačne):</span>
+          <span id="cartTotalPrice" class="text-2xl font-bold text-[#f59e0b]">0 €</span>
+        </div>
+
+        <!-- Submit Button -->
+        <button 
+          id="submitCartBtn"
+          class="w-full py-4 rounded-xl bg-gradient-to-r from-[#f59e0b] to-[#d97706] text-white font-semibold shadow-lg shadow-[#f59e0b]/20 hover:shadow-[#f59e0b]/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          </svg>
+          Odoslať dopyt
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success Modal -->
+  <div id="successModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+    <div class="relative glass rounded-3xl p-8 max-w-md w-full text-center animate-fade-in-up">
+      <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-[#22c55e]/10 flex items-center justify-center">
+        <svg class="w-10 h-10 text-[#22c55e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <h2 class="text-2xl font-bold text-white mb-2">Dopyt bol odoslaný!</h2>
+      <p class="text-slate-400 mb-6">Budeme vás kontaktovať s cenovou ponukou čo najskôr.</p>
+      <button id="closeSuccessBtn" class="px-8 py-3 rounded-xl bg-[#f59e0b] text-white font-semibold hover:bg-[#d97706] transition-colors">
+        Pokračovať v nákupe
+      </button>
+    </div>
+  </div>
 
   <!-- Product detail modal -->
   <div id="productModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -92,8 +250,8 @@ if (!session) {
 </Layout>
 
 <style>
-  .text-gradient-blue {
-    background: linear-gradient(135deg, #0967d2 0%, #47a3f3 100%);
+  .text-gradient-orange {
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -121,18 +279,160 @@ if (!session) {
   .animate-fade-in-up {
     animation: fadeInUp 0.3s ease-out forwards;
   }
+
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.3s ease-out forwards;
+  }
+
+  .cart-item {
+    transition: all 0.2s ease;
+  }
+
+  .cart-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .quantity-btn {
+    transition: all 0.15s ease;
+  }
+
+  .quantity-btn:hover:not(:disabled) {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+  }
+
+  .quantity-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .glass {
+    background: rgba(26, 26, 26, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-light {
+    background: rgba(42, 42, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .category-btn {
+    color: #94a3b8;
+    background: transparent;
+  }
+
+  .category-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #e2e8f0;
+  }
+
+  .category-btn.active {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    font-weight: 500;
+  }
+
+  .category-item {
+    transition: all 0.2s ease;
+  }
+
+  .category-item:hover {
+    transform: translateX(4px);
+  }
+
+  .category-item .category-btn.active {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 100%);
+    border-left: 3px solid #f59e0b;
+    padding-left: 9px;
+  }
+
+  .category-icon {
+    flex-shrink: 0;
+  }
+
+  .subcategories-container {
+    margin-top: 4px;
+    animation: slideDown 0.2s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .subcategory-btn {
+    color: #64748b;
+  }
+
+  .subcategory-btn:hover {
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .subcategory-btn.active {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b !important;
+    border-left: 2px solid #f59e0b;
+    margin-left: -2px;
+    padding-left: calc(0.5rem + 2px);
+  }
+
+  .subcategory-btn.active span {
+    color: #f59e0b !important;
+  }
+
+  .expand-btn {
+    flex-shrink: 0;
+  }
+
+  .expand-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 0.5rem;
+  }
 </style>
 
 <script>
+  interface Subcategory {
+    id: string;
+    name: string;
+    count: number;
+  }
+
+  interface Category {
+    id: string;
+    name: string;
+    count: number;
+    subcategories?: Subcategory[];
+  }
+
   interface ProductTemplate {
     id: string;
     name: string;
     description?: string;
     category?: string;
+    categoryId?: string;
     basePrice: number;
     baseCost?: number;
     deliveryDays?: number;
     defaultQuantity?: number;
+    isFavorite?: boolean;
     parameters?: Array<{
       id: string;
       parameterName: string;
@@ -149,11 +449,34 @@ if (!session) {
     }>;
   }
 
+  interface CartItem {
+    id: string;
+    name: string;
+    description?: string;
+    basePrice: number;
+    quantity: number;
+    deliveryDays?: number;
+    categoryId?: string;
+    parameters?: Array<{
+      id: string;
+      parameterName: string;
+      displayName: string;
+      value: string;
+      priceModifier?: number;
+    }>;
+  }
+
   let currentPage = 1;
   let totalPages = 1;
   let searchTimeout: number | null = null;
   let currentProducts: ProductTemplate[] = [];
+  let cart: CartItem[] = [];
+  let categories: Category[] = [];
+  let selectedCategory: string = '';
+  let showingFavorites: boolean = false;
+  let favoriteIds: string[] = [];
 
+  // DOM Elements
   const loadingState = document.getElementById('loadingState')!;
   const emptyState = document.getElementById('emptyState')!;
   const productsGrid = document.getElementById('productsGrid')!;
@@ -166,8 +489,270 @@ if (!session) {
   const modalOverlay = document.getElementById('modalOverlay')!;
   const closeModalBtn = document.getElementById('closeModal')!;
   const modalContent = document.getElementById('modalContent')!;
+  const categoryFilter = document.getElementById('categoryFilter')!;
+  const activeCategoryBadge = document.getElementById('activeCategoryBadge')!;
+  const activeCategoryName = document.getElementById('activeCategoryName')!;
+  const clearCategoryBtn = document.getElementById('clearCategory')!;
+  const allProductsCount = document.getElementById('allProductsCount')!;
+  const favoritesSection = document.getElementById('favoritesSection')!;
+  const showFavoritesBtn = document.getElementById('showFavoritesBtn')!;
+  const favoritesCount = document.getElementById('favoritesCount')!;
 
-  async function loadProducts(page = 1, search = '') {
+  // Cart elements
+  const floatingCart = document.getElementById('floatingCart')!;
+  const openCartBtn = document.getElementById('openCartBtn')!;
+  const cartDrawer = document.getElementById('cartDrawer')!;
+  const cartOverlay = document.getElementById('cartOverlay')!;
+  const closeCartBtn = document.getElementById('closeCartBtn')!;
+  const cartItems = document.getElementById('cartItems')!;
+  const emptyCartState = document.getElementById('emptyCartState')!;
+  const cartFooter = document.getElementById('cartFooter')!;
+  const cartCount = document.getElementById('cartCount')!;
+  const cartTotal = document.getElementById('cartTotal')!;
+  const cartTotalPrice = document.getElementById('cartTotalPrice')!;
+  const cartNote = document.getElementById('cartNote') as HTMLTextAreaElement;
+  const submitCartBtn = document.getElementById('submitCartBtn')!;
+  const successModal = document.getElementById('successModal')!;
+  const closeSuccessBtn = document.getElementById('closeSuccessBtn')!;
+
+  // Load cart from localStorage
+  function loadCart() {
+    try {
+      const saved = localStorage.getItem('productCart');
+      if (saved) {
+        cart = JSON.parse(saved);
+        updateCartUI();
+      }
+    } catch (e) {
+      console.error('Failed to load cart:', e);
+    }
+  }
+
+  // Save cart to localStorage
+  function saveCart() {
+    localStorage.setItem('productCart', JSON.stringify(cart));
+  }
+
+  // Calculate cart total
+  function getCartTotal(): number {
+    return cart.reduce((sum, item) => {
+      let itemPrice = item.basePrice;
+      if (item.parameters) {
+        item.parameters.forEach(p => {
+          if (p.priceModifier) itemPrice += p.priceModifier;
+        });
+      }
+      return sum + (itemPrice * item.quantity);
+    }, 0);
+  }
+
+  // Update cart UI
+  function updateCartUI() {
+    const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+    const total = getCartTotal();
+
+    cartCount.textContent = totalItems.toString();
+    cartTotal.textContent = `${total.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €`;
+    cartTotalPrice.textContent = `${total.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €`;
+
+    // Show/hide floating cart
+    if (totalItems > 0) {
+      floatingCart.classList.remove('hidden');
+    } else {
+      floatingCart.classList.add('hidden');
+    }
+
+    // Render cart items
+    if (cart.length === 0) {
+      cartItems.classList.add('hidden');
+      cartFooter.classList.add('hidden');
+      emptyCartState.classList.remove('hidden');
+    } else {
+      cartItems.classList.remove('hidden');
+      cartFooter.classList.remove('hidden');
+      emptyCartState.classList.add('hidden');
+
+      cartItems.innerHTML = cart.map((item, index) => {
+        let itemPrice = item.basePrice;
+        if (item.parameters) {
+          item.parameters.forEach(p => {
+            if (p.priceModifier) itemPrice += p.priceModifier;
+          });
+        }
+        const itemTotal = itemPrice * item.quantity;
+
+        return `
+          <div class="cart-item glass rounded-xl p-4" data-index="${index}">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-[#f59e0b] to-[#d97706] flex items-center justify-center text-xl flex-shrink-0">
+                📦
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="text-white font-medium truncate">${item.name}</h4>
+                <div class="text-sm text-slate-400">${itemPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €/ks</div>
+                ${item.parameters && item.parameters.length > 0 ? `
+                  <div class="text-xs text-slate-500 mt-1">
+                    ${item.parameters.map(p => `${p.displayName}: ${p.value}`).join(', ')}
+                  </div>
+                ` : ''}
+              </div>
+              <button class="remove-item-btn w-8 h-8 flex items-center justify-center rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors" data-index="${index}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div class="flex items-center justify-between mt-4">
+              <div class="flex items-center gap-2">
+                <button class="quantity-btn w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800 text-slate-400" data-index="${index}" data-action="decrease" ${item.quantity <= 1 ? 'disabled' : ''}>
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                  </svg>
+                </button>
+                <span class="w-10 text-center text-white font-medium">${item.quantity}</span>
+                <button class="quantity-btn w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800 text-slate-400" data-index="${index}" data-action="increase">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                </button>
+              </div>
+              <div class="text-lg font-bold text-[#f59e0b]">${itemTotal.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Add quantity button handlers
+      document.querySelectorAll('.quantity-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const index = parseInt(btn.getAttribute('data-index')!);
+          const action = btn.getAttribute('data-action');
+          if (action === 'increase') {
+            cart[index].quantity++;
+          } else if (action === 'decrease' && cart[index].quantity > 1) {
+            cart[index].quantity--;
+          }
+          saveCart();
+          updateCartUI();
+        });
+      });
+
+      // Add remove button handlers
+      document.querySelectorAll('.remove-item-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const index = parseInt(btn.getAttribute('data-index')!);
+          cart.splice(index, 1);
+          saveCart();
+          updateCartUI();
+        });
+      });
+    }
+  }
+
+  // Add to cart
+  function addToCart(product: ProductTemplate, quantity: number = 1, selectedParams?: CartItem['parameters']) {
+    const existingIndex = cart.findIndex(item => item.id === product.id);
+    
+    if (existingIndex >= 0) {
+      cart[existingIndex].quantity += quantity;
+    } else {
+      cart.push({
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        basePrice: product.basePrice,
+        quantity,
+        deliveryDays: product.deliveryDays,
+        categoryId: product.categoryId,
+        parameters: selectedParams,
+      });
+    }
+    
+    saveCart();
+    updateCartUI();
+    closeModal();
+
+    // Show success toast
+    showToast('Produkt bol pridaný do košíka');
+  }
+
+  // Show toast notification
+  function showToast(message: string) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed bottom-24 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl bg-[#22c55e] text-white font-medium shadow-lg z-50 animate-fade-in-up';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.remove();
+    }, 2000);
+  }
+
+  // Open cart drawer
+  function openCart() {
+    cartDrawer.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  // Close cart drawer
+  function closeCart() {
+    cartDrawer.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  // Submit order request
+  async function submitOrder() {
+    if (cart.length === 0) return;
+
+    submitCartBtn.disabled = true;
+    submitCartBtn.innerHTML = `
+      <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      Odosielam...
+    `;
+
+    try {
+      const response = await fetch('/api/order-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart,
+          note: cartNote.value || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit order');
+      }
+
+      // Clear cart
+      cart = [];
+      saveCart();
+      updateCartUI();
+      cartNote.value = '';
+
+      // Close cart and show success
+      closeCart();
+      successModal.classList.remove('hidden');
+    } catch (error) {
+      console.error('Error submitting order:', error);
+      showToast('Chyba pri odosielaní dopytu');
+    } finally {
+      submitCartBtn.disabled = false;
+      submitCartBtn.innerHTML = `
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+        </svg>
+        Odoslať dopyt
+      `;
+    }
+  }
+
+  async function loadProducts(page = 1, search = '', categoryId = '', favoritesOnly = false) {
     loadingState.classList.remove('hidden');
     emptyState.classList.add('hidden');
     productsGrid.classList.add('hidden');
@@ -179,11 +764,38 @@ if (!session) {
         pageSize: '12',
       });
       if (search) params.append('search', search);
+      if (categoryId) params.append('categoryId', categoryId);
+      if (favoritesOnly) params.append('favoritesOnly', 'true');
 
       const response = await fetch(`/api/product-templates?${params.toString()}`);
       const data = await response.json();
 
       loadingState.classList.add('hidden');
+
+      // Update favorites info
+      if (data.favorites && Array.isArray(data.favorites)) {
+        favoriteIds = data.favorites;
+        const favCount = data.counts?.favorites || favoriteIds.length;
+        favoritesCount.textContent = favCount.toString();
+        
+        // Show favorites section if there are favorites
+        if (favCount > 0) {
+          favoritesSection.classList.remove('hidden');
+        } else {
+          favoritesSection.classList.add('hidden');
+        }
+      }
+
+      // Update categories from API response
+      if (data.counts?.categories && categories.length === 0) {
+        categories = data.counts.categories;
+        renderCategories();
+      }
+
+      // Update total count
+      if (data.counts?.total) {
+        allProductsCount.textContent = data.counts.total.toString();
+      }
 
       if (!data.data || data.data.length === 0) {
         emptyState.classList.remove('hidden');
@@ -197,12 +809,11 @@ if (!session) {
       renderProducts(data.data);
       productsGrid.classList.remove('hidden');
 
-      if (totalPages > 1) {
+      // Always show pagination controls (even on single page for clarity)
         pagination.classList.remove('hidden');
         pageInfo.textContent = `Strana ${currentPage} z ${totalPages}`;
         prevPageBtn.disabled = currentPage <= 1;
         nextPageBtn.disabled = currentPage >= totalPages;
-      }
     } catch (error) {
       console.error('Error loading products:', error);
       loadingState.classList.add('hidden');
@@ -210,22 +821,186 @@ if (!session) {
     }
   }
 
+  // Render categories in sidebar
+  function renderCategories() {
+    // Category configuration with icons, colors and descriptions
+    const categoryConfig: Record<string, { icon: string; color: string; description: string }> = {
+      'maloformátová': { icon: '🖨️', color: '#3b82f6', description: 'Vizitky, letáky, plagáty, PF-ky' },
+      'veľkoformátová': { icon: '🎨', color: '#8b5cf6', description: 'Bannery, plachty, polepy, fólie' },
+      'kalendáre': { icon: '📅', color: '#10b981', description: 'Stolové, nástenné, plánovacie' },
+      'viazané': { icon: '📚', color: '#f59e0b', description: 'Brožúry, katalógy, knihy, menu' },
+      'outdoor': { icon: '🏙️', color: '#ef4444', description: 'Billboardy, bigboardy, citylight' },
+      'svadobná': { icon: '💒', color: '#ec4899', description: 'Oznámenia, pozvánky, menu, menovky' },
+      'samolepky': { icon: '🏷️', color: '#14b8a6', description: 'Etikety, nálepky, papierové, plastové' },
+      'prezentačné': { icon: '🎯', color: '#6366f1', description: 'Roll-upy, stojany, displeje' },
+      'textil': { icon: '👕', color: '#f97316', description: 'Tričká, mikiny, potlač, výšivka' },
+      'bloky': { icon: '📝', color: '#84cc16', description: 'Bloky, zápisníky, vzorkovníky' },
+      '3d': { icon: '🔷', color: '#06b6d4', description: '3D písmená, logá, špeciálne tvary' },
+    };
+
+    const getCategoryConfig = (name: string): { icon: string; color: string; description: string } => {
+      const lowerName = name.toLowerCase();
+      for (const [key, config] of Object.entries(categoryConfig)) {
+        if (lowerName.includes(key)) return config;
+      }
+      return { icon: '📦', color: '#64748b', description: 'Rôzne produkty' };
+    };
+
+    // Keep the "All products" button
+    const allBtn = categoryFilter.querySelector('[data-category=""]');
+    
+    // Add category buttons with enhanced visual and collapsible subcategories
+    const categoryHtml = categories.map(cat => {
+      const config = getCategoryConfig(cat.name);
+      const hasSubcategories = cat.subcategories && cat.subcategories.length > 0;
+      
+      // Generate subcategory buttons (hidden by default)
+      const subcategoryHtml = hasSubcategories ? `
+        <div class="subcategories-container hidden ml-10 mt-1 space-y-0.5 border-l-2 border-slate-700/50 pl-3" data-parent-id="${cat.id}">
+          ${cat.subcategories!.map(sub => `
+            <button 
+              class="category-btn subcategory-btn w-full text-left px-2 py-1.5 rounded-md text-xs transition-all hover:bg-slate-800/50"
+              data-category="${sub.id}"
+              data-parent="${cat.id}"
+            >
+              <span class="flex items-center justify-between">
+                <span class="text-slate-400 hover:text-slate-300">${sub.name}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-500">${sub.count}</span>
+              </span>
+            </button>
+          `).join('')}
+        </div>
+      ` : '';
+      
+      return `
+        <div class="category-item group relative" data-category="${cat.id}">
+          <div class="flex items-center">
+            <button 
+              class="category-btn flex-1 text-left px-3 py-2.5 rounded-lg text-sm transition-all"
+              data-category="${cat.id}"
+            >
+              <span class="flex items-center gap-2">
+                <span class="category-icon w-8 h-8 rounded-lg flex items-center justify-center text-base transition-transform group-hover:scale-110" style="background: ${config.color}20;">
+                  ${config.icon}
+                </span>
+                <span class="flex-1">
+                  <span class="block font-medium">${cat.name}</span>
+                  <span class="block text-xs text-slate-500 group-hover:text-slate-400 transition-colors">${config.description}</span>
+                </span>
+                <span class="text-xs px-2 py-0.5 rounded-full" style="background: ${config.color}20; color: ${config.color};">${cat.count}</span>
+              </span>
+            </button>
+            ${hasSubcategories ? `
+              <button class="expand-btn p-2 text-slate-500 hover:text-slate-300 transition-colors" data-expand="${cat.id}">
+                <svg class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            ` : ''}
+          </div>
+          ${subcategoryHtml}
+        </div>
+      `;
+    }).join('');
+
+    // Insert after "All products" button
+    if (allBtn) {
+      allBtn.insertAdjacentHTML('afterend', categoryHtml);
+    }
+
+    // Add click handlers to all category buttons
+    setupCategoryHandlers();
+  }
+
+  // Setup category button handlers
+  function setupCategoryHandlers() {
+    document.querySelectorAll('.category-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const categoryId = btn.getAttribute('data-category') || '';
+        selectCategory(categoryId);
+      });
+    });
+    
+    // Setup expand/collapse handlers for subcategories
+    document.querySelectorAll('.expand-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const parentId = btn.getAttribute('data-expand');
+        const subcategoriesContainer = document.querySelector(`.subcategories-container[data-parent-id="${parentId}"]`);
+        const arrow = btn.querySelector('svg');
+        
+        if (subcategoriesContainer) {
+          subcategoriesContainer.classList.toggle('hidden');
+          if (arrow) {
+            arrow.classList.toggle('rotate-180');
+          }
+        }
+      });
+    });
+  }
+
+  // Select a category
+  function selectCategory(categoryId: string) {
+    selectedCategory = categoryId;
+    showingFavorites = false;
+    
+    // Update active state for all buttons
+    document.querySelectorAll('.category-btn').forEach(btn => {
+      const btnCat = btn.getAttribute('data-category');
+      const isFavBtn = btn.getAttribute('data-favorites') === 'true';
+      
+      if (btnCat === categoryId && !isFavBtn) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    // Update badge
+    if (categoryId) {
+      const cat = categories.find(c => c.id === categoryId);
+      if (cat) {
+        activeCategoryName.textContent = cat.name;
+        activeCategoryBadge.classList.remove('hidden');
+      }
+    } else {
+      activeCategoryBadge.classList.add('hidden');
+    }
+
+    // Reload products (reset favorites when selecting category)
+    loadProducts(1, searchInput.value, categoryId, false);
+  }
+
   function renderProducts(products: ProductTemplate[]) {
     productsGrid.innerHTML = products.map((product, index) => `
       <div 
-        class="product-card glass rounded-2xl p-6 cursor-pointer hover:border-primary-500/50 border border-transparent"
+        class="product-card glass rounded-2xl p-6 hover:border-[#f59e0b]/50 border ${product.isFavorite ? 'border-[#f59e0b]/30 bg-gradient-to-br from-[#f59e0b]/5 to-transparent' : 'border-transparent'}"
         style="animation-delay: ${index * 50}ms"
         data-product-id="${product.id}"
       >
         <div class="flex items-start justify-between mb-4">
-          <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-600 to-primary-400 flex items-center justify-center text-2xl">
-            📦
+          <div class="relative">
+            <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-[#f59e0b] to-[#d97706] flex items-center justify-center text-2xl">
+              📦
+            </div>
+            ${product.isFavorite ? `
+              <div class="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-[#f59e0b] flex items-center justify-center text-xs shadow-lg">
+                ⭐
+              </div>
+            ` : ''}
           </div>
+          <div class="flex gap-2">
+            ${product.isFavorite ? `
+              <span class="px-2 py-1 rounded-lg bg-[#f59e0b]/20 text-[#f59e0b] text-xs font-medium">
+                Pre vás
+              </span>
+            ` : ''}
           ${product.deliveryDays ? `
             <span class="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs font-medium">
               ${product.deliveryDays} dní
             </span>
           ` : ''}
+          </div>
         </div>
         
         <h3 class="text-lg font-semibold text-white mb-2">${product.name}</h3>
@@ -237,32 +1012,50 @@ if (!session) {
         <div class="flex items-end justify-between">
           <div>
             <div class="text-xs text-slate-500 mb-1">Cena od</div>
-            <div class="text-xl font-bold text-primary-400">
+            <div class="text-xl font-bold text-[#f59e0b]">
               ${product.basePrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
             </div>
           </div>
           
-          <button class="view-product-btn px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-colors">
-            Zobraziť
+          <div class="flex gap-2">
+            <button class="view-product-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors" data-product-id="${product.id}">
+              👁️
+            </button>
+            <button class="add-to-cart-btn px-4 py-2 rounded-lg bg-[#f59e0b] hover:bg-[#d97706] text-white text-sm font-medium transition-colors" data-product-id="${product.id}">
+              + Pridať
           </button>
+          </div>
         </div>
       </div>
     `).join('');
 
-    // Add click handlers
-    document.querySelectorAll('.product-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const productId = card.getAttribute('data-product-id');
+    // Add click handlers for view button
+    document.querySelectorAll('.view-product-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const productId = btn.getAttribute('data-product-id');
         const product = currentProducts.find(p => p.id === productId);
         if (product) showProductModal(product);
+      });
+    });
+
+    // Add click handlers for add to cart button
+    document.querySelectorAll('.add-to-cart-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const productId = btn.getAttribute('data-product-id');
+        const product = currentProducts.find(p => p.id === productId);
+        if (product) addToCart(product, 1);
       });
     });
   }
 
   function showProductModal(product: ProductTemplate) {
+    const defaultQty = product.defaultQuantity || 1;
+    
     modalContent.innerHTML = `
       <div class="mb-6">
-        <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-600 to-primary-400 flex items-center justify-center text-4xl mb-4">
+        <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#f59e0b] to-[#d97706] flex items-center justify-center text-4xl mb-4">
           📦
         </div>
         <h2 class="text-2xl font-bold text-white mb-2">${product.name}</h2>
@@ -272,7 +1065,7 @@ if (!session) {
       <div class="grid grid-cols-2 gap-4 mb-6">
         <div class="glass-light rounded-xl p-4">
           <div class="text-xs text-slate-500 mb-1">Základná cena</div>
-          <div class="text-xl font-bold text-primary-400">
+          <div class="text-xl font-bold text-[#f59e0b]">
             ${product.basePrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
           </div>
         </div>
@@ -282,6 +1075,30 @@ if (!session) {
             <div class="text-xl font-bold text-emerald-400">${product.deliveryDays} dní</div>
           </div>
         ` : ''}
+      </div>
+
+      <!-- Quantity selector -->
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-slate-300 mb-2">Počet kusov</label>
+        <div class="flex items-center gap-3">
+          <button id="modalDecreaseQty" class="quantity-btn w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800 text-slate-400" ${defaultQty <= 1 ? 'disabled' : ''}>
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+            </svg>
+          </button>
+          <input 
+            type="number" 
+            id="modalQuantity" 
+            value="${defaultQty}" 
+            min="1"
+            class="w-20 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white text-center focus:border-[#f59e0b] outline-none"
+          />
+          <button id="modalIncreaseQty" class="quantity-btn w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800 text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </button>
+        </div>
       </div>
       
       ${product.parameters && product.parameters.length > 0 ? `
@@ -295,9 +1112,14 @@ if (!session) {
                   ${param.isRequired ? '<span class="text-red-400">*</span>' : ''}
                 </label>
                 ${param.options && param.options.length > 0 ? `
-                  <select class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white focus:border-primary-500 outline-none">
+                  <select 
+                    class="modal-param-select w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white focus:border-[#f59e0b] outline-none"
+                    data-param-id="${param.id}"
+                    data-param-name="${param.parameterName}"
+                    data-param-display="${param.displayName}"
+                  >
                     ${param.options.map(opt => `
-                      <option value="${opt.optionValue}">
+                      <option value="${opt.optionValue}" data-price-modifier="${opt.priceModifier || 0}">
                         ${opt.displayLabel}
                         ${opt.priceModifier ? ` (+${opt.priceModifier.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €)` : ''}
                       </option>
@@ -306,7 +1128,10 @@ if (!session) {
                 ` : `
                   <input 
                     type="${param.parameterType === 'number' ? 'number' : 'text'}"
-                    class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white focus:border-primary-500 outline-none"
+                    class="modal-param-input w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white focus:border-[#f59e0b] outline-none"
+                    data-param-id="${param.id}"
+                    data-param-name="${param.parameterName}"
+                    data-param-display="${param.displayName}"
                     placeholder="${param.displayName}"
                     value="${param.defaultValue || ''}"
                   />
@@ -318,14 +1143,67 @@ if (!session) {
       ` : ''}
       
       <div class="flex gap-4">
-        <button class="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white font-medium hover:from-primary-500 hover:to-primary-400 transition-all shadow-lg shadow-primary-600/20">
-          📧 Požiadať o ponuku
+        <button id="modalAddToCart" class="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-[#f59e0b] to-[#d97706] text-white font-medium hover:from-[#d97706] hover:to-[#b45309] transition-all shadow-lg shadow-[#f59e0b]/20 flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          Pridať do košíka
         </button>
-        <a href="tel:+421903222751" class="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors flex items-center gap-2">
-          📞 Volať
-        </a>
       </div>
     `;
+
+    // Setup modal quantity controls
+    const qtyInput = document.getElementById('modalQuantity') as HTMLInputElement;
+    const decreaseBtn = document.getElementById('modalDecreaseQty')!;
+    const increaseBtn = document.getElementById('modalIncreaseQty')!;
+    const addToCartBtn = document.getElementById('modalAddToCart')!;
+
+    decreaseBtn.addEventListener('click', () => {
+      const val = parseInt(qtyInput.value) || 1;
+      if (val > 1) {
+        qtyInput.value = (val - 1).toString();
+        (decreaseBtn as HTMLButtonElement).disabled = val - 1 <= 1;
+      }
+    });
+
+    increaseBtn.addEventListener('click', () => {
+      const val = parseInt(qtyInput.value) || 1;
+      qtyInput.value = (val + 1).toString();
+      (decreaseBtn as HTMLButtonElement).disabled = false;
+    });
+
+    addToCartBtn.addEventListener('click', () => {
+      const quantity = parseInt(qtyInput.value) || 1;
+      
+      // Collect parameters
+      const selectedParams: CartItem['parameters'] = [];
+      
+      document.querySelectorAll('.modal-param-select').forEach(select => {
+        const sel = select as HTMLSelectElement;
+        const selectedOption = sel.options[sel.selectedIndex];
+        selectedParams.push({
+          id: sel.getAttribute('data-param-id')!,
+          parameterName: sel.getAttribute('data-param-name')!,
+          displayName: sel.getAttribute('data-param-display')!,
+          value: selectedOption.text.split(' (+')[0].trim(),
+          priceModifier: parseFloat(selectedOption.getAttribute('data-price-modifier') || '0'),
+        });
+      });
+
+      document.querySelectorAll('.modal-param-input').forEach(input => {
+        const inp = input as HTMLInputElement;
+        if (inp.value) {
+          selectedParams.push({
+            id: inp.getAttribute('data-param-id')!,
+            parameterName: inp.getAttribute('data-param-name')!,
+            displayName: inp.getAttribute('data-param-display')!,
+            value: inp.value,
+          });
+        }
+      });
+
+      addToCart(product, quantity, selectedParams.length > 0 ? selectedParams : undefined);
+    });
 
     productModal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
@@ -340,25 +1218,66 @@ if (!session) {
   searchInput.addEventListener('input', () => {
     if (searchTimeout) clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
-      loadProducts(1, searchInput.value);
+      loadProducts(1, searchInput.value, selectedCategory, showingFavorites);
     }, 300) as unknown as number;
   });
 
   prevPageBtn.addEventListener('click', () => {
     if (currentPage > 1) {
-      loadProducts(currentPage - 1, searchInput.value);
+      loadProducts(currentPage - 1, searchInput.value, selectedCategory, showingFavorites);
     }
   });
 
   nextPageBtn.addEventListener('click', () => {
     if (currentPage < totalPages) {
-      loadProducts(currentPage + 1, searchInput.value);
+      loadProducts(currentPage + 1, searchInput.value, selectedCategory, showingFavorites);
     }
   });
 
   modalOverlay.addEventListener('click', closeModal);
   closeModalBtn.addEventListener('click', closeModal);
 
+  // Cart event listeners
+  openCartBtn.addEventListener('click', openCart);
+  cartOverlay.addEventListener('click', closeCart);
+  closeCartBtn.addEventListener('click', closeCart);
+  submitCartBtn.addEventListener('click', submitOrder);
+  closeSuccessBtn.addEventListener('click', () => {
+    successModal.classList.add('hidden');
+  });
+
+  // Clear category button
+  clearCategoryBtn.addEventListener('click', () => {
+    selectCategory('');
+  });
+
+  // Favorites button handler
+  showFavoritesBtn.addEventListener('click', () => {
+    showingFavorites = true;
+    selectedCategory = '';
+    
+    // Update active state - deselect all category buttons, select favorites
+    document.querySelectorAll('.category-btn').forEach(btn => {
+      const isFavBtn = btn.getAttribute('data-favorites') === 'true';
+      if (isFavBtn) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    // Update badge
+    activeCategoryName.textContent = '🌟 Obľúbené produkty';
+    activeCategoryBadge.classList.remove('hidden');
+
+    // Load only favorites
+    loadProducts(1, searchInput.value, '', true);
+  });
+
+  // Initial setup for "All products" category button
+  setupCategoryHandlers();
+
   // Initial load
+  loadCart();
   loadProducts();
 </script>

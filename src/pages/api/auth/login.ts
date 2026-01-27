@@ -38,6 +38,7 @@ export const POST: APIRoute = async ({ request }) => {
     // Create session
     const sessionCookie = createSessionCookie({
       customerId: customer.id,
+      customerEntityId: customer.entityId, // entityId for product template matching
       customerName: customer.name,
       email: email.trim().toLowerCase(),
       organizationId: customer.organizationId,
