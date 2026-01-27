@@ -131,7 +131,7 @@ function formatDate(date: Date | number | null): string {
               {currentStatus.label}
             </div>
           </div>
-          <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-1 sm:mb-2 px-2">{order.name}</h1>
+          <h1 class="text-lg sm:text-2xl md:text-3xl font-bold text-white mb-1 sm:mb-2 px-2 break-words hyphens-auto leading-tight">{order.name}</h1>
           <p class="text-slate-400 text-sm sm:text-base">Číslo: {order.orderNumber}</p>
           
           {isApproved && (
@@ -175,7 +175,7 @@ function formatDate(date: Date | number | null): string {
                 <div class="glass-light rounded-lg sm:rounded-xl p-3 sm:p-4">
                   <div class="flex justify-between items-start gap-2">
                     <div class="flex-1 min-w-0">
-                      <div class="text-white font-semibold text-sm sm:text-lg truncate">{product.name}</div>
+                      <div class="text-white font-semibold text-sm sm:text-lg break-words leading-snug">{product.name}</div>
                       <div class="text-xs sm:text-sm text-slate-400 mt-0.5 sm:mt-1">
                         × {product.quantity.toLocaleString('sk-SK', { maximumFractionDigits: 2 })} {product.unit}
                       </div>
