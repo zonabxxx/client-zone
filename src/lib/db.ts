@@ -1852,3 +1852,375 @@ export function isDatabaseConfigured(): boolean {
 export function getConnectionError(): string | null {
   return connectionError;
 }
+
+// ================== CLIENT STATISTICS ==================
+
+export interface ClientStatistics {
+  // Spending overview
+  totalSpent: number;
+  totalOrders: number;
+  averageOrderValue: number;
+  
+  // Monthly spending (last 12 months)
+  monthlySpending: {
+    month: string;
+    year: number;
+    amount: number;
+    orderCount: number;
+  }[];
+  
+  // Order status breakdown
+  orderStatusBreakdown: {
+    status: string;
+    count: number;
+    percentage: number;
+  }[];
+  
+  // Average times
+  averageDeliveryDays: number | null;
+  averageProductionDays: number | null;
+  fastestDeliveryDays: number | null;
+  
+  // Top products
+  topProducts: {
+    name: string;
+    count: number;
+    totalSpent: number;
+  }[];
+  
+  // Recent activity
+  lastOrderDate: Date | null;
+  ordersThisMonth: number;
+  ordersLastMonth: number;
+  spendingThisMonth: number;
+  spendingLastMonth: number;
+}
+
+// Get comprehensive client statistics
+export async function getClientStatistics(
+  clientEntityId: string,
+  clientName: string
+): Promise<ClientStatistics> {
+  try {
+    const db = getClient();
+    
+    // Default empty stats
+    const emptyStats: ClientStatistics = {
+      totalSpent: 0,
+      totalOrders: 0,
+      averageOrderValue: 0,
+      monthlySpending: [],
+      orderStatusBreakdown: [],
+      averageDeliveryDays: null,
+      averageProductionDays: null,
+      fastestDeliveryDays: null,
+      topProducts: [],
+      lastOrderDate: null,
+      ordersThisMonth: 0,
+      ordersLastMonth: 0,
+      spendingThisMonth: 0,
+      spendingLastMonth: 0,
+    };
+    
+    // Get all orders for this client
+    const ordersResult = await db.execute({
+      sql: `
+        SELECT 
+          id, status, total_value, 
+          start_date, planned_end_date, actual_end_date,
+          created_at
+        FROM orders_v2 
+        WHERE client_entity_id = ? OR LOWER(client_name) LIKE LOWER(?)
+        ORDER BY created_at DESC
+      `,
+      args: [clientEntityId, `%${clientName}%`]
+    });
+    
+    if (ordersResult.rows.length === 0) return emptyStats;
+    
+    const orders = ordersResult.rows;
+    const totalOrders = orders.length;
+    const totalSpent = orders.reduce((sum, o) => sum + ((o.total_value as number) || 0), 0);
+    
+    // Calculate monthly spending (last 12 months)
+    const monthlyMap = new Map<string, { amount: number; orderCount: number }>();
+    const now = new Date();
+    
+    // Initialize last 12 months
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      monthlyMap.set(key, { amount: 0, orderCount: 0 });
+    }
+    
+    // Fill with actual data
+    for (const order of orders) {
+      const createdAt = order.created_at as number;
+      if (!createdAt) continue;
+      
+      const date = new Date(createdAt * 1000);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (monthlyMap.has(key)) {
+        const current = monthlyMap.get(key)!;
+        current.amount += (order.total_value as number) || 0;
+        current.orderCount += 1;
+      }
+    }
+    
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Máj', 'Jún', 'Júl', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'];
+    const monthlySpending = Array.from(monthlyMap.entries()).map(([key, data]) => {
+      const [year, month] = key.split('-').map(Number);
+      return {
+        month: monthNames[month - 1],
+        year,
+        amount: data.amount,
+        orderCount: data.orderCount,
+      };
+    });
+    
+    // Order status breakdown
+    const statusCounts = new Map<string, number>();
+    for (const order of orders) {
+      const status = order.status as string;
+      statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+    }
+    
+    const orderStatusBreakdown = Array.from(statusCounts.entries()).map(([status, count]) => ({
+      status,
+      count,
+      percentage: Math.round((count / totalOrders) * 100),
+    }));
+    
+    // Calculate delivery times from order creation to last task before invoicing
+    let totalDeliveryDays = 0;
+    let totalProductionDays = 0;
+    let deliveryCount = 0;
+    let productionCount = 0;
+    let fastestDelivery = Infinity;
+    
+    // Get completion times from tasks (last task before FAKTURÁCIA)
+    const orderIds = orders.map(o => o.id as string);
+    
+    if (orderIds.length > 0) {
+      const placeholders = orderIds.map(() => '?').join(',');
+      
+      // Get last non-invoicing task completion per order
+      const taskTimesResult = await db.execute({
+        sql: `
+          SELECT 
+            t.order_id,
+            o.created_at as order_created_at,
+            o.start_date as order_start_date,
+            MAX(t.completed_at) as last_task_completed
+          FROM order_tasks_v2 t
+          JOIN orders_v2 o ON t.order_id = o.id
+          WHERE t.order_id IN (${placeholders})
+            AND t.status = 'completed'
+            AND t.department_name NOT IN ('FAKTURÁCIA', 'Fakturácia')
+          GROUP BY t.order_id, o.created_at, o.start_date
+        `,
+        args: orderIds
+      });
+      
+      for (const row of taskTimesResult.rows) {
+        const orderCreatedAt = row.order_created_at as number;
+        const orderStartDate = row.order_start_date as number;
+        const lastTaskCompleted = row.last_task_completed as number;
+        
+        // Production time: from start_date to last task completion
+        if (orderStartDate && lastTaskCompleted) {
+          const days = Math.round((lastTaskCompleted - orderStartDate) / 86400);
+          if (days >= 0) {
+            totalProductionDays += days;
+            productionCount++;
+          }
+        }
+        
+        // Delivery time: from order creation to last task completion (before invoicing)
+        if (orderCreatedAt && lastTaskCompleted) {
+          const days = Math.round((lastTaskCompleted - orderCreatedAt) / 86400);
+          if (days >= 0) {
+            totalDeliveryDays += days;
+            deliveryCount++;
+            if (days < fastestDelivery) fastestDelivery = days;
+          }
+        }
+      }
+    }
+    
+    // Fallback to order dates if no task data
+    if (deliveryCount === 0) {
+      for (const order of orders) {
+        const startDate = order.start_date as number;
+        const actualEnd = order.actual_end_date as number;
+        const createdAt = order.created_at as number;
+        
+        if (startDate && actualEnd) {
+          const days = Math.round((actualEnd - startDate) / 86400);
+          if (days > 0) {
+            totalProductionDays += days;
+            productionCount++;
+          }
+        }
+        
+        if (createdAt && actualEnd) {
+          const days = Math.round((actualEnd - createdAt) / 86400);
+          if (days > 0) {
+            totalDeliveryDays += days;
+            deliveryCount++;
+            if (days < fastestDelivery) fastestDelivery = days;
+          }
+        }
+      }
+    }
+    
+    // Get top products by DEPARTMENT from order_services (filter out internal departments)
+    // orderIds already declared above
+    const categoryCounts = new Map<string, { count: number; totalSpent: number }>();
+    
+    // Internal departments to exclude (not product categories)
+    const internalDepartments = [
+      'FAKTURÁCIA', 'Fakturácia', 'fakturácia',
+      'FINALIZÁCIA / BALENIE', 'Finalizácia / Balenie', 'finalizácia',
+      'Neviazane', 'NAKUP-PREDAJ', 'Nakup-predaj',
+      'Tlač', 'tlač', 'print', // generic print is internal
+      'balenie', 'Balenie', 'BALENIE',
+      'dokončovanie', 'Dokončovanie', 'DOKONČOVANIE',
+      'Uncategorized', 'uncategorized', 'Ostatné',
+    ];
+    
+    // Department name translations for display
+    const deptLabels: Record<string, string> = {
+      'Veľkoformátová tlač': 'Veľkoformát',
+      'velkoformatova-tlac': 'Veľkoformát',
+      'polep áut': 'Polep vozidiel',
+      'polep-aut': 'Polep vozidiel',
+      'Maloformátová tlač': 'Maloformát',
+      'maloformatova-tlac': 'Maloformát',
+      'Digitálna tlač': 'Digitálna tlač',
+      'PVC': 'PVC produkty',
+      'Roll-up': 'Roll-up systémy',
+      'Textil': 'Textilná potlač',
+      'Svetelná reklama': 'Svetelná reklama',
+    };
+    
+    if (orderIds.length > 0) {
+      const placeholders = orderIds.map(() => '?').join(',');
+      
+      const servicesResult = await db.execute({
+        sql: `
+          SELECT 
+            department_name,
+            COUNT(DISTINCT order_id) as order_count,
+            SUM(total_price) as total
+          FROM order_services 
+          WHERE order_id IN (${placeholders})
+            AND total_price > 0
+          GROUP BY department_name
+          ORDER BY total DESC
+        `,
+        args: orderIds
+      });
+      
+      for (const row of servicesResult.rows) {
+        const deptName = row.department_name as string;
+        
+        // Skip internal departments
+        if (internalDepartments.some(d => d.toLowerCase() === deptName.toLowerCase())) {
+          continue;
+        }
+        
+        // Get display name
+        const displayName = deptLabels[deptName] || deptName;
+        const count = row.order_count as number;
+        const total = (row.total as number) || 0;
+        
+        if (categoryCounts.has(displayName)) {
+          const existing = categoryCounts.get(displayName)!;
+          existing.count += count;
+          existing.totalSpent += total;
+        } else {
+          categoryCounts.set(displayName, { count, totalSpent: total });
+        }
+      }
+    }
+    
+    // Fallback if no categories found
+    if (categoryCounts.size === 0 && orders.length > 0) {
+      let totalValue = 0;
+      for (const order of orders) {
+        totalValue += (order.total_value as number) || 0;
+      }
+      categoryCounts.set('Zákazky celkom', { count: orders.length, totalSpent: totalValue });
+    }
+    
+    // Sort by total spent and take top 5
+    const topProducts = Array.from(categoryCounts.entries())
+      .map(([name, data]) => ({ name, count: data.count, totalSpent: data.totalSpent }))
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .slice(0, 5);
+    
+    // This month / last month stats
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000;
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime() / 1000;
+    
+    let ordersThisMonth = 0;
+    let ordersLastMonth = 0;
+    let spendingThisMonth = 0;
+    let spendingLastMonth = 0;
+    let lastOrderDate: Date | null = null;
+    
+    for (const order of orders) {
+      const createdAt = order.created_at as number;
+      const value = (order.total_value as number) || 0;
+      
+      if (!lastOrderDate && createdAt) {
+        lastOrderDate = new Date(createdAt * 1000);
+      }
+      
+      if (createdAt >= thisMonthStart) {
+        ordersThisMonth++;
+        spendingThisMonth += value;
+      } else if (createdAt >= lastMonthStart && createdAt < thisMonthStart) {
+        ordersLastMonth++;
+        spendingLastMonth += value;
+      }
+    }
+    
+    return {
+      totalSpent,
+      totalOrders,
+      averageOrderValue: totalOrders > 0 ? totalSpent / totalOrders : 0,
+      monthlySpending,
+      orderStatusBreakdown,
+      averageDeliveryDays: deliveryCount > 0 ? Math.round(totalDeliveryDays / deliveryCount) : null,
+      averageProductionDays: productionCount > 0 ? Math.round(totalProductionDays / productionCount) : null,
+      fastestDeliveryDays: fastestDelivery !== Infinity ? fastestDelivery : null,
+      topProducts,
+      lastOrderDate,
+      ordersThisMonth,
+      ordersLastMonth,
+      spendingThisMonth,
+      spendingLastMonth,
+    };
+  } catch (error) {
+    console.error('Error getting client statistics:', error);
+    return {
+      totalSpent: 0,
+      totalOrders: 0,
+      averageOrderValue: 0,
+      monthlySpending: [],
+      orderStatusBreakdown: [],
+      averageDeliveryDays: null,
+      averageProductionDays: null,
+      fastestDeliveryDays: null,
+      topProducts: [],
+      lastOrderDate: null,
+      ordersThisMonth: 0,
+      ordersLastMonth: 0,
+      spendingThisMonth: 0,
+      spendingLastMonth: 0,
+    };
+  }
+}

@@ -62,10 +62,11 @@ body {
 .geometric-bg::before {
   content: '';
   position: absolute;
-  top: -50%;
-  left: -50%;
+  top: 50%;
+  left: 50%;
   width: 200%;
   height: 200%;
+  transform: translate(-50%, -50%);
   background: 
     linear-gradient(45deg, transparent 45%, rgba(245, 158, 11, 0.03) 45%, rgba(245, 158, 11, 0.03) 55%, transparent 55%),
     linear-gradient(-45deg, transparent 45%, rgba(245, 158, 11, 0.03) 45%, rgba(245, 158, 11, 0.03) 55%, transparent 55%),
@@ -85,8 +86,8 @@ body {
 }
 
 @keyframes moveLines {
-  0% { transform: translate(0, 0); }
-  100% { transform: translate(60px, 60px); }
+  0% { transform: translate(-50%, -50%); }
+  100% { transform: translate(calc(-50% + 60px), calc(-50% + 60px)); }
 }
 
 /* ADSUN Glass card effect */

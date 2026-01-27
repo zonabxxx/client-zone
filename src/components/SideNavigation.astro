@@ -1,6 +1,6 @@
 ---
 interface Props {
-  active: 'dashboard' | 'orders' | 'quotes' | 'products' | 'billboards' | 'installations' | 'messages' | 'tips' | 'rewards';
+  active: 'dashboard' | 'orders' | 'quotes' | 'products' | 'billboards' | 'installations' | 'messages' | 'tips' | 'rewards' | 'statistics';
 }
 
 const { active } = Astro.props;
@@ -9,6 +9,7 @@ const navItems = [
   { id: 'dashboard', href: '/dashboard', icon: 'home', label: 'Dashboard' },
   { id: 'orders', href: '/dashboard', icon: 'package', label: 'Zákazky' },
   { id: 'quotes', href: '/quotes', icon: 'file-text', label: 'Cenové ponuky' },
+  { id: 'statistics', href: '/statistics', icon: 'bar-chart', label: 'Štatistiky' },
   { id: 'products', href: '/products', icon: 'shopping-cart', label: 'Produktový katalóg' },
   { id: 'billboards', href: '/billboards', icon: 'monitor', label: 'Billboardy' },
   { id: 'installations', href: '/installations', icon: 'tool', label: 'Inštalácie' },
@@ -97,6 +98,13 @@ const bottomItems = [
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
           </svg>
         )}
+        {item.icon === 'bar-chart' && (
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="20" x2="12" y2="10"/>
+            <line x1="18" y1="20" x2="18" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="16"/>
+          </svg>
+        )}
         
         <!-- Tooltip -->
         <div class="absolute left-full ml-2 px-3 py-1.5 bg-[#1a1a1a] text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap border border-[#333]">
@@ -166,7 +174,7 @@ const bottomItems = [
 <!-- Mobile Bottom Navigation -->
 <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-[#111111] border-t border-[#1a1a1a] z-50">
   <div class="flex justify-around items-center py-2 px-4">
-    {[navItems[0], navItems[2], navItems[3], navItems[6], bottomItems[0]].map((item) => (
+    {[navItems[0], navItems[2], navItems[3], navItems[7], bottomItems[0]].map((item) => (
       <a 
         href={item.href}
         class:list={[
@@ -226,6 +234,13 @@ const bottomItems = [
         {item.icon === 'star' && (
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        )}
+        {item.icon === 'bar-chart' && (
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="20" x2="12" y2="10"/>
+            <line x1="18" y1="20" x2="18" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="16"/>
           </svg>
         )}
         <span class="text-[10px] font-medium">{item.label.split(' ')[0]}</span>
