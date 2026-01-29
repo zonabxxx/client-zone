@@ -39,10 +39,11 @@ export async function translateText(
   }
 
   try {
-    const apiKey = import.meta.env.GOOGLE_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = import.meta.env.GOOGLE_TRANSLATE_API_KEY || 
+                   process.env.GOOGLE_TRANSLATE_API_KEY;
     
     if (!apiKey) {
-      console.warn('⚠️ GOOGLE_API_KEY not configured, returning original text');
+      console.warn('⚠️ GOOGLE_TRANSLATE_API_KEY not configured, returning original text');
       return text;
     }
 
@@ -130,10 +131,11 @@ export async function translateBatch(
   }
 
   try {
-    const apiKey = import.meta.env.GOOGLE_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = import.meta.env.GOOGLE_TRANSLATE_API_KEY || 
+                   process.env.GOOGLE_TRANSLATE_API_KEY;
     
     if (!apiKey) {
-      console.warn('⚠️ GOOGLE_API_KEY not configured, returning original texts');
+      console.warn('⚠️ GOOGLE_TRANSLATE_API_KEY not configured, returning original texts');
       return texts;
     }
 
