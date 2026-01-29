@@ -3,6 +3,7 @@ import Layout from '../../../layouts/Layout.astro';
 import { getCalculationByShareToken } from '../../../lib/db';
 import { format } from 'date-fns';
 import { sk, de } from 'date-fns/locale';
+import { translateBatch } from '../../../lib/translate';
 
 const { id, token } = Astro.params;
 
@@ -131,7 +132,60 @@ const products = calculationData.products || [];
 const services = calculationData.services || [];
 const materials = calculationData.materials || [];
 
-// Helper to get full product name (including template/variant)
+// 🌍 Dynamic translation for product/service names
+const translationMap = new Map<string, string>();
+
+if (isGerman) {
+  // Collect all texts that need translation
+  const textsToTranslate: string[] = [];
+  
+  // Product names and descriptions
+  products.forEach((p: any) => {
+    const templateName = p.productTemplate?.name || p.template?.name || '';
+    const productName = p.product?.name || p.product?.categoryName || p.name || '';
+    const variantName = p.variant?.name || p.variant?.variantName || '';
+    const description = p.variant?.description || p.description || '';
+    
+    if (templateName) textsToTranslate.push(templateName);
+    if (productName) textsToTranslate.push(productName);
+    if (variantName) textsToTranslate.push(variantName);
+    if (description) textsToTranslate.push(description);
+  });
+  
+  // Service names
+  services.forEach((s: any) => {
+    const serviceName = s.serviceName || s.name || '';
+    if (serviceName) textsToTranslate.push(serviceName);
+  });
+  
+  // Material names
+  materials.forEach((m: any) => {
+    const materialName = m.materialName || m.name || '';
+    if (materialName) textsToTranslate.push(materialName);
+  });
+  
+  // Remove duplicates
+  const uniqueTexts = [...new Set(textsToTranslate.filter(t => t.trim()))];
+  
+  if (uniqueTexts.length > 0) {
+    try {
+      const translated = await translateBatch(uniqueTexts, 'de-AT', 'sk');
+      uniqueTexts.forEach((original, i) => {
+        translationMap.set(original, translated[i]);
+      });
+    } catch (e) {
+      console.error('Translation failed:', e);
+    }
+  }
+}
+
+// Helper function to get translated text
+function tr(text: string): string {
+  if (!isGerman || !text) return text;
+  return translationMap.get(text) || text;
+}
+
+// Helper to get full product name (including template/variant) - with translation
 function getProductName(p: any): string {
   // Try to get template name first
   const templateName = p.productTemplate?.name || p.template?.name || '';
@@ -142,19 +196,37 @@ function getProductName(p: any): string {
   // Get variant name
   const variantName = p.variant?.name || p.variant?.variantName || '';
   
-  // Build full name
+  // Build full name with translations
   if (templateName) {
     if (variantName && variantName !== templateName) {
-      return `${templateName} - ${variantName}`;
+      return `${tr(templateName)} - ${tr(variantName)}`;
     }
-    return templateName;
+    return tr(templateName);
   }
   
   if (productName && variantName && variantName !== productName) {
-    return `${productName} - ${variantName}`;
+    return `${tr(productName)} - ${tr(variantName)}`;
   }
   
-  return variantName || productName || 'Produkt';
+  return tr(variantName) || tr(productName) || (isGerman ? 'Produkt' : 'Produkt');
+}
+
+// Helper to get product description - with translation
+function getProductDescription(p: any): string {
+  const description = p.variant?.description || p.description || '';
+  return tr(description);
+}
+
+// Helper to get service name - with translation
+function getServiceName(s: any): string {
+  const name = s.serviceName || s.name || '';
+  return tr(name);
+}
+
+// Helper to get material name - with translation
+function getMaterialName(m: any): string {
+  const name = m.materialName || m.name || '';
+  return tr(name);
 }
 
 // Get client info
@@ -355,7 +427,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                   {products.map((p: any, idx: number) => {
                     const specs = p.templateConfigLabels || {};
                     const hasSpecs = Object.keys(specs).length > 0;
-                    const description = p.variant?.description || p.product?.description || '';
+                    const description = getProductDescription(p);
                     
                     return (
                       <div class="py-3 px-4 bg-slate-800/50 rounded-lg">
@@ -436,7 +508,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                 <div class="space-y-2">
                   {services.map((s: any, idx: number) => (
                     <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
-                      <span class="text-slate-300 font-medium">{s.serviceName || s.service?.name || s.name || 'Služba'}</span>
+                      <span class="text-slate-300 font-medium">{getServiceName(s) || (isGerman ? 'Dienstleistung' : 'Služba')}</span>
                       <span class="font-semibold text-white">{formatCurrency(Number(s.calculatedCost) || 0)}</span>
                     </div>
                   ))}
