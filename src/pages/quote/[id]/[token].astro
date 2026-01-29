@@ -173,6 +173,8 @@ if (isGerman) {
   // Service names
   services.forEach((s: any) => {
     const serviceName = s.serviceName || s.service?.name || s.name || '';
+    console.log('🔧 [COLLECT] Service data:', JSON.stringify(s).substring(0, 200));
+    console.log('🔧 [COLLECT] Service name:', serviceName);
     if (serviceName) textsToTranslate.push(serviceName);
   });
   
@@ -243,7 +245,8 @@ function getProductDescription(p: any): string {
 
 // Helper to get service name - with translation
 function getServiceName(s: any): string {
-  const name = s.serviceName || s.name || '';
+  const name = s.serviceName || s.service?.name || s.name || '';
+  console.log('🔧 [SERVICE] Raw name:', name, 'Translated:', tr(name));
   return tr(name);
 }
 
