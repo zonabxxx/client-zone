@@ -289,9 +289,14 @@ if (hasPersonalContact) {
     clientDisplayName = contactTitle ? `${contactTitle} ${contactFullName}` : contactFullName;
   }
 } else if (companyName) {
-  // Company only - different greeting
-  clientGreeting = isGerman ? 'Sehr geehrte Damen und Herren bei' : 'Vážená spoločnosť';
-  clientDisplayName = companyName;
+  // Company only - different greeting (no name in greeting for German)
+  if (isGerman) {
+    clientGreeting = 'Sehr geehrte Damen und Herren';
+    clientDisplayName = ''; // Company name shown separately
+  } else {
+    clientGreeting = 'Vážená spoločnosť';
+    clientDisplayName = companyName;
+  }
 }
 
 // Legacy fallback
@@ -395,9 +400,9 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
           <div class="text-sm text-slate-400 mb-2">{organization.name}</div>
         )}
         <h1 class="text-3xl font-bold text-white mb-2">{calculation.name}</h1>
-        {clientDisplayName && (
+        {(clientGreeting || clientDisplayName) && (
           <p class="text-slate-400">
-            {clientGreeting} <span class="font-medium text-white">{clientDisplayName}</span>,<br />
+            {clientGreeting}{clientDisplayName && <> <span class="font-medium text-white">{clientDisplayName}</span></>},<br />
             {t.preparedQuote}
           </p>
         )}
