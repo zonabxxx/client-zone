@@ -2,7 +2,7 @@
 import Layout from '../../../layouts/Layout.astro';
 import { getCalculationByShareToken } from '../../../lib/db';
 import { format } from 'date-fns';
-import { sk } from 'date-fns/locale';
+import { sk, de } from 'date-fns/locale';
 
 const { id, token } = Astro.params;
 
@@ -18,6 +18,102 @@ if (!result) {
 }
 
 const { calculation, share, organization } = result;
+
+// 🌍 Language support - read from query parameter
+type Language = 'sk' | 'de-AT';
+const langParam = Astro.url.searchParams.get('lang') as Language | null;
+const lang: Language = langParam === 'de-AT' ? 'de-AT' : 'sk';
+const isGerman = lang === 'de-AT';
+
+// Translations for multi-language support
+const translations = {
+  sk: {
+    quoteTitle: 'Cenová ponuka',
+    dear: 'Vážený/á',
+    preparedQuote: 'pripravili sme pre Vás ponuku',
+    inPreparation: 'V príprave',
+    waitingApproval: 'Čaká na schválenie',
+    approved: 'Schválené',
+    rejected: 'Zamietnuté',
+    changesRequested: 'Požadované zmeny',
+    expired: 'Ponuka expirovala',
+    contactUs: 'Kontaktujte nás pre aktuálnu ponuku.',
+    details: 'Detaily',
+    products: 'Produkty',
+    product: 'produkt',
+    productsPlural: 'produkty',
+    services: 'Služby',
+    service: 'služba',
+    servicesPlural: 'služby',
+    subtotalWithoutVat: 'Medzisúčet bez DPH',
+    vat: 'DPH',
+    reverseCharge: 'Reverse Charge',
+    totalWithVat: 'Celkom s DPH',
+    total: 'Celkom',
+    deliveryIn: 'Dodanie do',
+    workingDays: 'pracovných dní',
+    yourPrice: 'Vaša cena',
+    includingVat: 'vrátane DPH',
+    netPrice: 'netto (Reverse Charge)',
+    validUntil: 'Ponuka platí do',
+    approve: 'Súhlasím s ponukou',
+    question: 'Mám otázku',
+    reject: 'Nemám záujem',
+    thankYouApproved: 'Ďakujeme za schválenie!',
+    responseRecorded: 'Odpoveď zaznamenaná',
+    questionSent: 'Vaša otázka bola odoslaná',
+    willContactApproved: 'Budeme Vás čoskoro kontaktovať ohľadom ďalších krokov.',
+    willContactRejected: 'Ďakujeme za odpoveď. Ak zmeníte názor, neváhajte nás kontaktovať.',
+    willContactQuestion: 'Budeme Vás čoskoro kontaktovať s odpoveďou.',
+    backToList: 'Späť na zoznam ponúk',
+    allRightsReserved: 'Všetky práva vyhradené',
+    pcs: 'ks',
+  },
+  'de-AT': {
+    quoteTitle: 'Angebot',
+    dear: 'Sehr geehrte/r',
+    preparedQuote: 'wir haben ein Angebot für Sie vorbereitet',
+    inPreparation: 'In Vorbereitung',
+    waitingApproval: 'Wartet auf Genehmigung',
+    approved: 'Genehmigt',
+    rejected: 'Abgelehnt',
+    changesRequested: 'Änderungen angefordert',
+    expired: 'Angebot abgelaufen',
+    contactUs: 'Kontaktieren Sie uns für ein aktuelles Angebot.',
+    details: 'Details',
+    products: 'Produkte',
+    product: 'Produkt',
+    productsPlural: 'Produkte',
+    services: 'Dienstleistungen',
+    service: 'Dienstleistung',
+    servicesPlural: 'Dienstleistungen',
+    subtotalWithoutVat: 'Zwischensumme netto',
+    vat: 'MwSt.',
+    reverseCharge: 'Reverse Charge',
+    totalWithVat: 'Gesamt inkl. MwSt.',
+    total: 'Gesamt netto',
+    deliveryIn: 'Lieferung in',
+    workingDays: 'Werktagen',
+    yourPrice: 'Ihr Preis',
+    includingVat: 'inkl. MwSt.',
+    netPrice: 'netto (Reverse Charge)',
+    validUntil: 'Angebot gültig bis',
+    approve: 'Angebot annehmen',
+    question: 'Frage stellen',
+    reject: 'Kein Interesse',
+    thankYouApproved: 'Vielen Dank für Ihre Zustimmung!',
+    responseRecorded: 'Antwort aufgezeichnet',
+    questionSent: 'Ihre Frage wurde gesendet',
+    willContactApproved: 'Wir werden Sie in Kürze bezüglich der nächsten Schritte kontaktieren.',
+    willContactRejected: 'Vielen Dank für Ihre Antwort. Falls Sie Ihre Meinung ändern, kontaktieren Sie uns gerne.',
+    willContactQuestion: 'Wir werden Sie in Kürze mit einer Antwort kontaktieren.',
+    backToList: 'Zurück zur Angebotsliste',
+    allRightsReserved: 'Alle Rechte vorbehalten',
+    pcs: 'Stk.',
+  },
+};
+
+const t = translations[lang];
 
 // Check if expired
 const isExpired = share.expiresAt && new Date(share.expiresAt) < new Date();
@@ -64,8 +160,8 @@ function getProductName(p: any): string {
 // Get client info
 const clientName = calculationData.selectedClient?.name || calculation.companyName || '';
 
-// Get VAT rate
-const vatRate = organization?.vatRate ?? 20;
+// Get VAT rate - 0% for German (reverse charge for EU B2B)
+const vatRate = isGerman ? 0 : (organization?.vatRate ?? 20);
 
 // Calculate totals
 const computeProductTotal = (p: any): number => {
@@ -99,28 +195,30 @@ const totalWithVat = totalAmount + vatAmount;
 // Delivery days
 const deliveryDays = calculationData.overallDeliveryDays ?? null;
 
-// Format functions
+// Format functions - use correct locale based on language
 function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('sk-SK', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const locale = isGerman ? 'de-AT' : 'sk-SK';
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(n || 0);
 }
 
 function formatDate(date: Date | string | null): string {
   if (!date) return '—';
   try {
     const d = new Date(date);
-    return format(d, 'd. MMMM yyyy', { locale: sk });
+    const dateLocale = isGerman ? de : sk;
+    return format(d, 'd. MMMM yyyy', { locale: dateLocale });
   } catch {
     return '—';
   }
 }
 
-// Approval status config
+// Approval status config - use translations
 const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
-  'DRAFT': { label: 'V príprave', color: 'text-slate-400', bgColor: 'bg-slate-500/20', icon: '📝' },
-  'CLIENT_VIEWED': { label: 'Čaká na schválenie', color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: '⏳' },
-  'CLIENT_APPROVED': { label: 'Schválené', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20', icon: '✅' },
-  'CLIENT_REJECTED': { label: 'Zamietnuté', color: 'text-red-400', bgColor: 'bg-red-500/20', icon: '❌' },
-  'CLIENT_REQUESTED_CHANGES': { label: 'Požadované zmeny', color: 'text-orange-400', bgColor: 'bg-orange-500/20', icon: '✏️' },
+  'DRAFT': { label: t.inPreparation, color: 'text-slate-400', bgColor: 'bg-slate-500/20', icon: '📝' },
+  'CLIENT_VIEWED': { label: t.waitingApproval, color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: '⏳' },
+  'CLIENT_APPROVED': { label: t.approved, color: 'text-emerald-400', bgColor: 'bg-emerald-500/20', icon: '✅' },
+  'CLIENT_REJECTED': { label: t.rejected, color: 'text-red-400', bgColor: 'bg-red-500/20', icon: '❌' },
+  'CLIENT_REQUESTED_CHANGES': { label: t.changesRequested, color: 'text-orange-400', bgColor: 'bg-orange-500/20', icon: '✏️' },
 };
 
 // Check for responded query param (just submitted)
@@ -137,7 +235,7 @@ const isRejected = approvalStatus === 'CLIENT_REJECTED' || respondedAction === '
 const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respondedAction === 'requested_changes';
 ---
 
-<Layout title={`Cenová ponuka - ${calculation.name}`}>
+<Layout title={`${t.quoteTitle} - ${calculation.name}`}>
   <main class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
     <div class="max-w-2xl mx-auto px-5 py-10">
       
@@ -150,7 +248,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
-          Späť na zoznam ponúk
+          {t.backToList}
         </a>
       )}
       
@@ -162,8 +260,8 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
         <h1 class="text-3xl font-bold text-white mb-2">{calculation.name}</h1>
         {clientName && (
           <p class="text-slate-400">
-            Vážený/á <span class="font-medium text-white">{clientName}</span>,<br />
-            pripravili sme pre Vás ponuku
+            {t.dear} <span class="font-medium text-white">{clientName}</span>,<br />
+            {t.preparedQuote}
           </p>
         )}
         
@@ -184,8 +282,8 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h3 class="text-xl font-bold text-white mb-2">Ponuka expirovala</h3>
-          <p class="text-slate-400">Kontaktujte nás pre aktuálnu ponuku.</p>
+          <h3 class="text-xl font-bold text-white mb-2">{t.expired}</h3>
+          <p class="text-slate-400">{t.contactUs}</p>
         </div>
       )}
 
@@ -205,7 +303,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                   </svg>
                 </span>
                 <div class="text-left">
-                  <div class="font-semibold text-white">{products.length} {products.length === 1 ? 'produkt' : 'produkty'}</div>
+                  <div class="font-semibold text-white">{products.length} {products.length === 1 ? t.product : t.productsPlural}</div>
                   <div class="text-xs text-slate-400">
                     {products.slice(0, 2).map((p: any) => getProductName(p)).join(', ')}
                     {products.length > 2 && '...'}
@@ -224,7 +322,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                       </svg>
                     </span>
                     <div class="text-left">
-                      <div class="font-semibold text-white">{services.length} {services.length === 1 ? 'služba' : 'služby'}</div>
+                      <div class="font-semibold text-white">{services.length} {services.length === 1 ? t.service : t.servicesPlural}</div>
                     </div>
                   </div>
                 </>
@@ -232,7 +330,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
             </div>
             
             <div class="flex items-center gap-2 text-emerald-400">
-              <span class="text-sm font-medium">Detaily</span>
+              <span class="text-sm font-medium">{t.details}</span>
               <svg id="chevronIcon" class="w-5 h-5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
@@ -251,7 +349,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                       <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clip-rule="evenodd" />
                     </svg>
                   </span>
-                  Produkty
+                  {t.products}
                 </h4>
                 <div class="space-y-2">
                   {products.map((p: any, idx: number) => {
@@ -264,7 +362,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                         <div class="flex justify-between items-start mb-2">
                           <span class="text-slate-300 font-medium">
                             {getProductName(p)}
-                            <span class="text-slate-500 font-normal ml-2">× {Number(p.quantity) || 1} ks</span>
+                            <span class="text-slate-500 font-normal ml-2">× {Number(p.quantity) || 1} {t.pcs}</span>
                           </span>
                           <span class="font-semibold text-white">{formatCurrency(computeProductTotal(p))}</span>
                         </div>
@@ -333,7 +431,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </span>
-                  Služby
+                  {t.services}
                 </h4>
                 <div class="space-y-2">
                   {services.map((s: any, idx: number) => (
@@ -350,15 +448,22 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
             <div class="p-5 bg-slate-800/30">
               <div class="space-y-2">
                 <div class="flex justify-between py-1">
-                  <span class="text-slate-400">Medzisúčet bez DPH</span>
+                  <span class="text-slate-400">{t.subtotalWithoutVat}</span>
                   <span class="text-white">{formatCurrency(totalAmount)}</span>
                 </div>
-                <div class="flex justify-between py-1">
-                  <span class="text-slate-400">DPH {vatRate}%</span>
-                  <span class="text-white">{formatCurrency(vatAmount)}</span>
-                </div>
+                {vatRate > 0 ? (
+                  <div class="flex justify-between py-1">
+                    <span class="text-slate-400">{t.vat} {vatRate}%</span>
+                    <span class="text-white">{formatCurrency(vatAmount)}</span>
+                  </div>
+                ) : (
+                  <div class="flex justify-between py-1">
+                    <span class="text-slate-400 text-sm">{t.reverseCharge} - {t.vat} 0%</span>
+                    <span class="text-white">{formatCurrency(0)}</span>
+                  </div>
+                )}
                 <div class="flex justify-between py-2 mt-2 border-t border-slate-700">
-                  <span class="font-bold text-white text-lg">Celkom s DPH</span>
+                  <span class="font-bold text-white text-lg">{vatRate > 0 ? t.totalWithVat : t.total}</span>
                   <span class="font-bold text-emerald-400 text-lg">{formatCurrency(totalWithVat)}</span>
                 </div>
               </div>
@@ -374,19 +479,19 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <span>Dodanie do <strong class="text-white">{deliveryDays} pracovných dní</strong></span>
+                <span>{t.deliveryIn} <strong class="text-white">{deliveryDays} {t.workingDays}</strong></span>
               </div>
             )}
 
             {/* Price Section */}
             <div class="p-8 bg-gradient-to-br from-emerald-500/10 to-blue-500/10">
               <div class="text-center">
-                <div class="text-sm text-slate-400 mb-1">Vaša cena</div>
+                <div class="text-sm text-slate-400 mb-1">{t.yourPrice}</div>
                 <div class="text-5xl font-bold text-white mb-1">
                   {formatCurrency(totalWithVat)}
                 </div>
                 <div class="text-sm text-slate-400">
-                  vrátane DPH {vatRate}%
+                  {vatRate > 0 ? `${t.includingVat} ${vatRate}%` : t.netPrice}
                 </div>
               </div>
             </div>
@@ -395,7 +500,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
             {share.expiresAt && (
               <div class="px-6 py-3 bg-amber-500/10 border-t border-amber-500/30 text-center">
                 <span class="text-amber-400 text-sm">
-                  ⏰ Ponuka platí do <strong>{formatDate(share.expiresAt)}</strong>
+                  ⏰ {t.validUntil} <strong>{formatDate(share.expiresAt)}</strong>
                 </span>
               </div>
             )}
@@ -421,14 +526,14 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                   )}
                 </div>
                 <h3 class="text-xl font-bold text-white mb-2">
-                  {respondedAction === 'approved' && 'Ďakujeme za schválenie!'}
-                  {respondedAction === 'rejected' && 'Odpoveď zaznamenaná'}
-                  {respondedAction === 'requested_changes' && 'Vaša otázka bola odoslaná'}
+                  {respondedAction === 'approved' && t.thankYouApproved}
+                  {respondedAction === 'rejected' && t.responseRecorded}
+                  {respondedAction === 'requested_changes' && t.questionSent}
                 </h3>
                 <p class="text-slate-400">
-                  {respondedAction === 'approved' && 'Budeme Vás čoskoro kontaktovať ohľadom ďalších krokov.'}
-                  {respondedAction === 'rejected' && 'Ďakujeme za odpoveď. Ak zmeníte názor, neváhajte nás kontaktovať.'}
-                  {respondedAction === 'requested_changes' && 'Budeme Vás čoskoro kontaktovať s odpoveďou.'}
+                  {respondedAction === 'approved' && t.willContactApproved}
+                  {respondedAction === 'rejected' && t.willContactRejected}
+                  {respondedAction === 'requested_changes' && t.willContactQuestion}
                 </p>
               </div>
             )}
@@ -448,7 +553,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
-                    Súhlasím s ponukou
+                    {t.approve}
                   </button>
                 </form>
 
@@ -457,13 +562,13 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                     id="changesBtn"
                     class="py-3 rounded-xl text-sm font-medium text-slate-300 bg-slate-700/50 hover:bg-slate-700 transition-colors"
                   >
-                    Mám otázku
+                    {t.question}
                   </button>
                   <button
                     id="rejectBtn"
                     class="py-3 rounded-xl text-sm font-medium text-slate-400 bg-slate-800/50 hover:bg-slate-800 transition-colors"
                   >
-                    Nemám záujem
+                    {t.reject}
                   </button>
                 </div>
 
