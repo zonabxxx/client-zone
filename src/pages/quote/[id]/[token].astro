@@ -253,8 +253,46 @@ function getMaterialName(m: any): string {
   return tr(name);
 }
 
-// Get client info
-const clientName = calculationData.selectedClient?.name || calculation.companyName || '';
+// Get client info - distinguish between contact person and company name
+const selectedClient = calculationData.selectedClient || {};
+const contactFirstName = selectedClient["Hlavný kontakt - meno"]?.trim() || '';
+const contactLastName = selectedClient["Hlavný kontakt - priezvisko"]?.trim() || '';
+const contactTitle = selectedClient["Hlavný kontakt - titul"]?.trim() || '';
+const contactPerson = selectedClient.contactPerson?.trim() || '';
+const companyName = selectedClient.name?.trim() || selectedClient["Názov"]?.trim() || calculation.companyName || '';
+
+// Build contact person full name
+const contactFullName = [contactFirstName, contactLastName].filter(Boolean).join(' ') || contactPerson;
+
+// Determine if we have a personal contact or just company
+const hasPersonalContact = !!contactFullName;
+
+// Build display name and greeting
+let clientDisplayName = '';
+let clientGreeting = '';
+
+if (hasPersonalContact) {
+  // Personal contact - use name with honorific
+  const isLikelyFemale = contactFirstName && contactFirstName.toLowerCase().endsWith('a') && 
+    !['ondreja', 'mateja', 'lukáša', 'barnabáša'].some(ex => contactFirstName.toLowerCase().includes(ex));
+  
+  if (isGerman) {
+    const honorific = isLikelyFemale ? 'Frau' : 'Herr';
+    clientGreeting = `Sehr geehrte${isLikelyFemale ? '' : 'r'} ${honorific}`;
+    clientDisplayName = contactTitle ? `${contactTitle} ${contactFullName}` : contactFullName;
+  } else {
+    const honorific = isLikelyFemale ? 'pani' : 'pán';
+    clientGreeting = `Vážen${isLikelyFemale ? 'á' : 'ý'} ${honorific}`;
+    clientDisplayName = contactTitle ? `${contactTitle} ${contactFullName}` : contactFullName;
+  }
+} else if (companyName) {
+  // Company only - different greeting
+  clientGreeting = isGerman ? 'Sehr geehrte Damen und Herren bei' : 'Vážená spoločnosť';
+  clientDisplayName = companyName;
+}
+
+// Legacy fallback
+const clientName = contactFullName || companyName;
 
 // Get VAT rate - 0% for German (reverse charge for EU B2B)
 const vatRate = isGerman ? 0 : (organization?.vatRate ?? 20);
@@ -354,9 +392,9 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
           <div class="text-sm text-slate-400 mb-2">{organization.name}</div>
         )}
         <h1 class="text-3xl font-bold text-white mb-2">{calculation.name}</h1>
-        {clientName && (
+        {clientDisplayName && (
           <p class="text-slate-400">
-            {t.dear} <span class="font-medium text-white">{clientName}</span>,<br />
+            {clientGreeting} <span class="font-medium text-white">{clientDisplayName}</span>,<br />
             {t.preparedQuote}
           </p>
         )}
