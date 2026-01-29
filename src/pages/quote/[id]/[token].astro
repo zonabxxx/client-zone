@@ -139,22 +139,40 @@ if (isGerman) {
   // Collect all texts that need translation
   const textsToTranslate: string[] = [];
   
-  // Product names and descriptions
-  products.forEach((p: any) => {
+  // Helper to build full product name (same logic as getProductName but without translation)
+  function buildProductNameRaw(p: any): string {
     const templateName = p.productTemplate?.name || p.template?.name || '';
     const productName = p.product?.name || p.product?.categoryName || p.name || '';
     const variantName = p.variant?.name || p.variant?.variantName || '';
-    const description = p.variant?.description || p.description || '';
     
-    if (templateName) textsToTranslate.push(templateName);
-    if (productName) textsToTranslate.push(productName);
-    if (variantName) textsToTranslate.push(variantName);
+    if (templateName) {
+      if (variantName && variantName !== templateName) {
+        return `${templateName} - ${variantName}`;
+      }
+      return templateName;
+    }
+    
+    if (productName && variantName && variantName !== productName) {
+      return `${productName} - ${variantName}`;
+    }
+    
+    return variantName || productName || '';
+  }
+  
+  // Product full names and descriptions
+  products.forEach((p: any) => {
+    // Add the FULL combined product name for translation
+    const fullName = buildProductNameRaw(p);
+    if (fullName) textsToTranslate.push(fullName);
+    
+    // Also add description
+    const description = p.variant?.description || p.product?.description || p.description || '';
     if (description) textsToTranslate.push(description);
   });
   
   // Service names
   services.forEach((s: any) => {
-    const serviceName = s.serviceName || s.name || '';
+    const serviceName = s.serviceName || s.service?.name || s.name || '';
     if (serviceName) textsToTranslate.push(serviceName);
   });
   
@@ -167,14 +185,17 @@ if (isGerman) {
   // Remove duplicates
   const uniqueTexts = [...new Set(textsToTranslate.filter(t => t.trim()))];
   
+  console.log('🌍 [TRANSLATE] Texts to translate:', uniqueTexts);
+  
   if (uniqueTexts.length > 0) {
     try {
       const translated = await translateBatch(uniqueTexts, 'de-AT', 'sk');
       uniqueTexts.forEach((original, i) => {
         translationMap.set(original, translated[i]);
+        console.log(`🌍 [TRANSLATE] "${original}" → "${translated[i]}"`);
       });
     } catch (e) {
-      console.error('Translation failed:', e);
+      console.error('🌍 [TRANSLATE] Translation failed:', e);
     }
   }
 }
@@ -196,19 +217,22 @@ function getProductName(p: any): string {
   // Get variant name
   const variantName = p.variant?.name || p.variant?.variantName || '';
   
-  // Build full name with translations
+  // Build full name first (without translation)
+  let fullName = '';
   if (templateName) {
     if (variantName && variantName !== templateName) {
-      return `${tr(templateName)} - ${tr(variantName)}`;
+      fullName = `${templateName} - ${variantName}`;
+    } else {
+      fullName = templateName;
     }
-    return tr(templateName);
+  } else if (productName && variantName && variantName !== productName) {
+    fullName = `${productName} - ${variantName}`;
+  } else {
+    fullName = variantName || productName || '';
   }
   
-  if (productName && variantName && variantName !== productName) {
-    return `${tr(productName)} - ${tr(variantName)}`;
-  }
-  
-  return tr(variantName) || tr(productName) || (isGerman ? 'Produkt' : 'Produkt');
+  // Translate the full name as one unit
+  return tr(fullName) || (isGerman ? 'Produkt' : 'Produkt');
 }
 
 // Helper to get product description - with translation
