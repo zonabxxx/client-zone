@@ -1720,17 +1720,22 @@ export async function updateQuoteResponse(
     // Send webhook notification to main app (for email notifications - backup)
     try {
       const webhookUrl = import.meta.env.PUBLIC_MAIN_APP_URL || 'https://business-flow-ai.up.railway.app';
-      await fetch(`${webhookUrl}/api/webhooks/quote-response`, {
+      console.log('[updateQuoteResponse] Sending webhook to:', `${webhookUrl}/api/webhooks/quote-response`);
+      
+      const webhookResponse = await fetch(`${webhookUrl}/api/webhooks/quote-response`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           calculationId,
+          token,
           action,
           comment: comment || null,
           respondedAt: new Date().toISOString()
         })
       });
-      console.log('[updateQuoteResponse] Webhook notification sent');
+      
+      const webhookText = await webhookResponse.text();
+      console.log('[updateQuoteResponse] Webhook response:', webhookResponse.status, webhookText.substring(0, 200));
     } catch (webhookError) {
       console.error('[updateQuoteResponse] Failed to send webhook (non-blocking):', webhookError);
       // Don't fail the whole operation if webhook fails
