@@ -1355,10 +1355,38 @@ export async function getCalculationByShareToken(
       args: [calculationId, token]
     });
     
-    if (shareResult.rows.length === 0) return null;
+    console.log('[getCalculationByShareToken] Share result:', shareResult.rows.length);
+    
+    if (shareResult.rows.length === 0) {
+      console.log('[getCalculationByShareToken] No share found for token');
+      return null;
+    }
     
     const shareRow = shareResult.rows[0];
     const organizationId = shareRow.organization_id as string | null;
+    
+    console.log('[getCalculationByShareToken] Organization ID:', organizationId);
+    
+    // Get calculations table ID for this organization (dynamic, not hardcoded)
+    let calculationsTableId: string | null = null;
+    if (organizationId) {
+      const tableResult = await db.execute({
+        sql: `SELECT id FROM table_definitions 
+              WHERE organization_id = ? AND name = 'calculations'
+              LIMIT 1`,
+        args: [organizationId]
+      });
+      if (tableResult.rows.length > 0) {
+        calculationsTableId = tableResult.rows[0].id as string;
+      }
+    }
+    
+    // Fallback to hardcoded if not found (for backwards compatibility)
+    if (!calculationsTableId) {
+      calculationsTableId = EAV_TABLES.calculations;
+    }
+    
+    console.log('[getCalculationByShareToken] Using table ID:', calculationsTableId);
     
     // Get calculation entity data
     const entityResult = await db.execute({
@@ -1369,10 +1397,15 @@ export async function getCalculationByShareToken(
               AND a.attribute_name = 'id' 
               AND a.string_value = ?
             LIMIT 1`,
-      args: [EAV_TABLES.calculations, calculationId]
+      args: [calculationsTableId, calculationId]
     });
     
-    if (entityResult.rows.length === 0) return null;
+    console.log('[getCalculationByShareToken] Entity result:', entityResult.rows.length);
+    
+    if (entityResult.rows.length === 0) {
+      console.log('[getCalculationByShareToken] No entity found for calculation ID:', calculationId);
+      return null;
+    }
     
     const entityId = entityResult.rows[0].entityId as string;
     
