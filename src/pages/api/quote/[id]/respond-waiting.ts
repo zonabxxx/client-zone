@@ -54,7 +54,36 @@ export const POST: APIRoute = async ({ params, request, redirect }) => {
     
     console.log('[respond-waiting] Updated share with response');
     
-    // Send webhook notification to main app
+    // Create activity log entry directly
+    try {
+      const orgResult = await db.execute({
+        sql: `SELECT organization_id FROM calculation_shares WHERE id = ? LIMIT 1`,
+        args: [share.id]
+      });
+      const organizationId = orgResult.rows[0]?.organization_id as string | null;
+      
+      const activityId = crypto.randomUUID();
+      const now = Math.floor(Date.now() / 1000);
+      
+      await db.execute({
+        sql: `INSERT INTO calculation_activities (id, calculation_id, action, description, metadata, organization_id, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          activityId,
+          id,
+          'question_received',
+          `Klient položil otázku: "${comment.trim()}"`,
+          JSON.stringify({ comment: comment.trim(), respondedAt: new Date().toISOString(), clientName: session.customerName }),
+          organizationId,
+          now
+        ]
+      });
+      console.log('[respond-waiting] Activity created directly');
+    } catch (activityError) {
+      console.error('[respond-waiting] Failed to create activity:', activityError);
+    }
+    
+    // Send webhook notification to main app (backup for email notifications)
     try {
       const webhookUrl = import.meta.env.PUBLIC_MAIN_APP_URL || 'https://business-flow-ai.up.railway.app';
       const webhookResponse = await fetch(`${webhookUrl}/api/webhooks/quote-response`, {

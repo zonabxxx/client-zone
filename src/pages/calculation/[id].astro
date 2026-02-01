@@ -1,0 +1,273 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import DashboardHeader from '../../components/DashboardHeader.astro';
+import { getSessionFromCookie } from '../../lib/session';
+import { getCalculationById, getCalculationProducts, getCalculationActivities, canCustomerAccessCalculation, getCalculationShareLink } from '../../lib/db';
+import { format } from 'date-fns';
+import { sk } from 'date-fns/locale';
+
+// Check authentication
+const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
+
+if (!session) {
+  return Astro.redirect('/');
+}
+
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect('/calculations');
+}
+
+// Verify access
+const hasAccess = await canCustomerAccessCalculation(session.customerId, session.customerName, id);
+if (!hasAccess) {
+  return Astro.redirect('/calculations');
+}
+
+// Fetch calculation data
+const calculation = await getCalculationById(id);
+
+if (!calculation) {
+  return Astro.redirect('/calculations');
+}
+
+// Get products
+const products = await getCalculationProducts(id);
+
+// Get share link
+const shareLink = await getCalculationShareLink(id);
+
+// Get communication history
+const activities = await getCalculationActivities(id);
+const communicationActivities = activities.filter(a => 
+  a.action === 'question_received' || 
+  a.action === 'client_requested_changes' ||
+  a.action === 'client_approved' ||
+  a.action === 'client_rejected'
+);
+
+// Get client request message
+const clientRequestMessage = calculation.calculationData?.clientRequestMessage || null;
+const isWaitingForClient = calculation.approvalStatus === 'WAITING_FOR_CLIENT';
+
+// Status config
+const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
+  'DRAFT': { label: 'V príprave', color: 'text-slate-400', bgColor: 'bg-slate-500/20', icon: '📝' },
+  'SENT_TO_CLIENT': { label: 'Odoslaná', color: 'text-blue-400', bgColor: 'bg-blue-500/20', icon: '📤' },
+  'CLIENT_VIEWED': { label: 'Čaká na schválenie', color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: '⏳' },
+  'CLIENT_APPROVED': { label: 'Schválené', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20', icon: '✅' },
+  'CLIENT_REJECTED': { label: 'Zamietnuté', color: 'text-red-400', bgColor: 'bg-red-500/20', icon: '❌' },
+  'CLIENT_REQUESTED_CHANGES': { label: 'Požadované zmeny', color: 'text-orange-400', bgColor: 'bg-orange-500/20', icon: '✏️' },
+  'WAITING_FOR_CLIENT': { label: 'Čaká na Vás', color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: '⏳' },
+};
+const currentStatus = statusConfig[calculation.approvalStatus] || statusConfig['DRAFT'];
+
+// Calculate totals
+const vatRate = 23;
+const subtotal = Math.round(products.reduce((sum, p) => sum + (p.totalPrice || 0), 0) * 100) / 100;
+const vatAmount = Math.round(subtotal * (vatRate / 100) * 100) / 100;
+const totalWithVat = Math.round((subtotal + vatAmount) * 100) / 100;
+
+function formatDate(date: Date | number | null): string {
+  if (!date) return '—';
+  try {
+    const d = typeof date === 'number' ? new Date(date) : new Date(date);
+    return format(d, 'd. MMMM yyyy', { locale: sk });
+  } catch {
+    return '—';
+  }
+}
+---
+
+<Layout title={`Kalkulácia - ${calculation.name}`}>
+  <main class="min-h-screen">
+    <DashboardHeader customerName={session.customerName} />
+    
+    <div class="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+      <!-- Back button -->
+      <a href="/calculations" class="inline-flex items-center gap-1.5 sm:gap-2 text-slate-400 hover:text-white transition-colors mb-4 sm:mb-6 text-sm sm:text-base">
+        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        Späť na zoznam
+      </a>
+
+      <!-- Header -->
+      <div class="glass rounded-2xl sm:rounded-3xl p-4 sm:p-8 mb-4 sm:mb-6 animate-fade-in-up">
+        <div class="text-center mb-6">
+          <div class="flex flex-wrap items-center justify-center gap-2 mb-4">
+            <div class="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/20 rounded-full text-blue-400 text-sm font-medium">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Cenová ponuka
+            </div>
+            <div class={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${currentStatus.bgColor} ${currentStatus.color}`}>
+              <span>{currentStatus.icon}</span>
+              {currentStatus.label}
+            </div>
+          </div>
+          <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2">{calculation.name}</h1>
+          {calculation.calculationNumber && (
+            <p class="text-slate-400 text-sm">Číslo: {calculation.calculationNumber}</p>
+          )}
+        </div>
+
+        <!-- Waiting for Client - Request Message -->
+        {isWaitingForClient && clientRequestMessage && (
+          <div class="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl mb-6">
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div class="flex-1">
+                <h4 class="text-amber-400 font-semibold text-sm mb-1">Potrebujeme od Vás</h4>
+                <p class="text-slate-400 text-xs mb-2">Prosím dodajte nasledovné údaje:</p>
+                <div class="bg-slate-800/50 rounded-lg p-3 text-white whitespace-pre-wrap text-sm">
+                  {clientRequestMessage}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <!-- Products -->
+        {products.length > 0 && (
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
+                  <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clip-rule="evenodd" />
+                </svg>
+              </span>
+              <span class="text-sm font-semibold text-white uppercase tracking-wider">Produkty</span>
+            </div>
+            
+            <div class="space-y-3">
+              {products.map((product) => (
+                <div class="glass-light rounded-xl p-4">
+                  <div class="flex justify-between items-start gap-2">
+                    <div class="flex-1 min-w-0">
+                      <div class="text-white font-semibold text-lg">{product.name}</div>
+                      <div class="text-sm text-slate-400 mt-1">
+                        × {product.quantity.toLocaleString('sk-SK', { maximumFractionDigits: 2 })} {product.unit}
+                      </div>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                      <div class="text-xl font-bold text-emerald-400">
+                        {product.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 0 })} €
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <!-- Totals -->
+        <div class="border-t border-slate-700/50 pt-6">
+          <div class="space-y-2 text-sm mb-4">
+            <div class="flex justify-between text-slate-400">
+              <span>Medzisúčet bez DPH</span>
+              <span>{subtotal.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span>DPH {vatRate}%</span>
+              <span>{vatAmount.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</span>
+            </div>
+          </div>
+          
+          <div class="text-center">
+            <div class="text-3xl sm:text-4xl font-bold text-emerald-400 mb-1">
+              {totalWithVat.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
+            </div>
+            <div class="text-sm text-slate-400">vrátane DPH {vatRate}%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Communication History -->
+      {communicationActivities.length > 0 && (
+        <div class="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6 mb-6 animate-fade-in-up">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
+              <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-white">História komunikácie</h3>
+          </div>
+          <div class="space-y-3">
+            {communicationActivities.map((activity) => {
+              const isQuestion = activity.action === 'question_received' || activity.action === 'client_requested_changes';
+              const isApproval = activity.action === 'client_approved';
+              const isRejection = activity.action === 'client_rejected';
+              
+              return (
+                <div class={`rounded-xl p-4 ${isQuestion ? 'bg-amber-500/10 border border-amber-500/20' : isApproval ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                  <div class="flex items-start gap-3">
+                    <div class={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isQuestion ? 'bg-amber-500/20' : isApproval ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
+                      {isQuestion ? (
+                        <svg class="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd" />
+                        </svg>
+                      ) : isApproval ? (
+                        <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                      ) : (
+                        <svg class="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class={`text-sm font-medium ${isQuestion ? 'text-amber-300' : isApproval ? 'text-emerald-300' : 'text-red-300'}`}>
+                        {isQuestion ? 'Vaša otázka' : isApproval ? 'Schválili ste ponuku' : 'Zamietli ste ponuku'}
+                      </div>
+                      {activity.comment && (
+                        <p class="text-slate-300 text-sm mt-1 whitespace-pre-wrap">"{activity.comment}"</p>
+                      )}
+                      <p class="text-slate-500 text-xs mt-2">
+                        {format(activity.createdAt, 'd. MMM yyyy, HH:mm', { locale: sk })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <!-- Action buttons -->
+      {shareLink && (
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <a 
+            href={shareLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-semibold rounded-xl transition-all shadow-lg shadow-emerald-600/20"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Zobraziť detailnú ponuku
+          </a>
+        </div>
+      )}
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .glass-light {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+  }
+</style>

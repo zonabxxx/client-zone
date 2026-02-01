@@ -402,6 +402,22 @@ export async function canCustomerAccessOrder(customerId: string, customerName: s
          (order.clientName?.toLowerCase().includes(customerName.toLowerCase()) ?? false);
 }
 
+// Check if customer can access a calculation
+export async function canCustomerAccessCalculation(customerId: string, customerName: string, calculationId: string): Promise<boolean> {
+  const calculation = await getCalculationById(calculationId);
+  if (!calculation) return false;
+  
+  // Check by client entity ID or name match
+  const calcClient = calculation.calculationData?.selectedClient;
+  if (calcClient) {
+    if (calcClient.entityId === customerId || calcClient.id === customerId) return true;
+    const calcClientName = calcClient.name || '';
+    if (calcClientName.toLowerCase().includes(customerName.toLowerCase())) return true;
+  }
+  
+  return false;
+}
+
 // Product for quote display (grouped from services)
 // Sticker/dimension info for product
 export interface ProductDimension {
@@ -1326,6 +1342,8 @@ export interface PublicQuoteData {
     expiresAt: Date | null;
     status: string;
     clientResponse: string | null;
+    clientComment: string | null;
+    respondedAt: Date | null;
   };
   organization: {
     name: string;
@@ -1348,7 +1366,7 @@ export async function getCalculationByShareToken(
     
     // Verify share token is valid
     const shareResult = await db.execute({
-      sql: `SELECT token, expires_at, status, client_response, organization_id
+      sql: `SELECT token, expires_at, status, client_response, client_comment, responded_at, organization_id
             FROM calculation_shares 
             WHERE calculation_id = ? AND token = ?
             LIMIT 1`,
@@ -1505,6 +1523,8 @@ export async function getCalculationByShareToken(
         expiresAt: shareRow.expires_at ? new Date((shareRow.expires_at as number) * 1000) : null,
         status: shareRow.status as string,
         clientResponse: shareRow.client_response as string | null,
+        clientComment: shareRow.client_comment as string | null,
+        respondedAt: shareRow.responded_at ? new Date((shareRow.responded_at as number) * 1000) : null,
       },
       organization,
     };
@@ -1514,11 +1534,11 @@ export async function getCalculationByShareToken(
   }
 }
 
-// Update quote response (approve/reject/request changes)
+// Update quote response (approve/reject/request changes/question)
 export async function updateQuoteResponse(
   calculationId: string,
   token: string,
-  action: 'approved' | 'rejected' | 'requested_changes',
+  action: 'approved' | 'rejected' | 'requested_changes' | 'question_received',
   comment?: string
 ): Promise<boolean> {
   try {
@@ -1641,7 +1661,59 @@ export async function updateQuoteResponse(
       console.log('[updateQuoteResponse] Skipping status update (question only)');
     }
     
-    // Send webhook notification to main app (for email notifications)
+    // Create activity log entry directly in database
+    try {
+      // Get organization_id from the share
+      const orgResult = await db.execute({
+        sql: `SELECT organization_id FROM calculation_shares WHERE calculation_id = ? AND token = ? LIMIT 1`,
+        args: [calculationId, token]
+      });
+      const organizationId = orgResult.rows[0]?.organization_id as string | null;
+      
+      // Map action to activity description
+      let activityAction: string;
+      let description: string;
+      switch (action) {
+        case 'approved':
+          activityAction = 'client_approved';
+          description = 'Klient schválil ponuku';
+          break;
+        case 'rejected':
+          activityAction = 'client_rejected';
+          description = 'Klient zamietol ponuku';
+          break;
+        case 'requested_changes':
+          activityAction = 'client_requested_changes';
+          description = `Klient požiadal o zmeny: "${comment || "(bez textu)"}"`;
+          break;
+        default:
+          activityAction = 'question_received';
+          description = `Klient položil otázku: "${comment || "(bez textu)"}"`;
+      }
+      
+      const activityId = crypto.randomUUID();
+      const now = Math.floor(Date.now() / 1000);
+      
+      await db.execute({
+        sql: `INSERT INTO calculation_activities (id, calculation_id, action, description, metadata, organization_id, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          activityId,
+          calculationId,
+          activityAction,
+          description,
+          JSON.stringify({ comment: comment || null, respondedAt: new Date().toISOString() }),
+          organizationId,
+          now
+        ]
+      });
+      console.log('[updateQuoteResponse] Activity created directly:', activityAction);
+    } catch (activityError) {
+      console.error('[updateQuoteResponse] Failed to create activity:', activityError);
+      // Don't fail - activity is nice to have
+    }
+    
+    // Send webhook notification to main app (for email notifications - backup)
     try {
       const webhookUrl = import.meta.env.PUBLIC_MAIN_APP_URL || 'https://business-flow-ai.up.railway.app';
       await fetch(`${webhookUrl}/api/webhooks/quote-response`, {
@@ -2329,5 +2401,54 @@ export async function getClientStatistics(
       spendingThisMonth: 0,
       spendingLastMonth: 0,
     };
+  }
+}
+
+// Get calculation activities (questions, responses, status changes)
+export interface CalculationActivity {
+  id: string;
+  action: string;
+  description: string;
+  comment: string | null;
+  createdAt: Date;
+}
+
+export async function getCalculationActivities(calculationId: string): Promise<CalculationActivity[]> {
+  try {
+    const db = getClient();
+    
+    console.log('[getCalculationActivities] Fetching for calculation:', calculationId);
+    
+    const result = await db.execute({
+      sql: `SELECT id, action, description, metadata, created_at
+            FROM calculation_activities
+            WHERE calculation_id = ?
+            ORDER BY created_at DESC
+            LIMIT 50`,
+      args: [calculationId]
+    });
+    
+    console.log('[getCalculationActivities] Found:', result.rows.length, 'activities');
+    
+    return result.rows.map(row => {
+      let comment: string | null = null;
+      if (row.metadata) {
+        try {
+          const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata as string) : row.metadata;
+          comment = meta?.comment || null;
+        } catch { /* ignore */ }
+      }
+      
+      return {
+        id: row.id as string,
+        action: row.action as string,
+        description: row.description as string,
+        comment,
+        createdAt: new Date((row.created_at as number) * 1000),
+      };
+    });
+  } catch (error) {
+    console.error('[getCalculationActivities] Error:', error);
+    return [];
   }
 }
