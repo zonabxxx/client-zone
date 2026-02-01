@@ -1519,15 +1519,16 @@ export async function updateQuoteResponse(
       return false;
     }
     
-    // Map action to approval status
+    // Map action to approval status (question_received doesn't change status)
     const approvalStatusMap: Record<string, string> = {
       'approved': 'CLIENT_APPROVED',
       'rejected': 'CLIENT_REJECTED',
       'requested_changes': 'CLIENT_REQUESTED_CHANGES',
+      'question_received': '', // No status change for questions
     };
     
-    const newApprovalStatus = approvalStatusMap[action];
-    console.log('[updateQuoteResponse] New approval status:', newApprovalStatus);
+    const newApprovalStatus = approvalStatusMap[action] || '';
+    console.log('[updateQuoteResponse] New approval status:', newApprovalStatus || '(no change - question)');
     
     // Update share with response, comment, and timestamp
     try {
@@ -1553,54 +1554,58 @@ export async function updateQuoteResponse(
       // Continue anyway - the main goal is to update the calculation status
     }
     
-    // Update calculation approval status via EAV
-    const entityResult = await db.execute({
-      sql: `SELECT e.id as entityId 
-            FROM entities e 
-            JOIN attributes a ON e.id = a.entity_id 
-            WHERE e.table_id = ? 
-              AND a.attribute_name = 'id' 
-              AND a.string_value = ?
-            LIMIT 1`,
-      args: [EAV_TABLES.calculations, calculationId]
-    });
-    
-    console.log('[updateQuoteResponse] Entity result:', JSON.stringify(entityResult.rows));
-    
-    if (entityResult.rows.length > 0) {
-      const entityId = entityResult.rows[0].entityId as string;
-      console.log('[updateQuoteResponse] Found entity:', entityId);
-      
-      // Check if approvalStatus attribute exists
-      const existingAttr = await db.execute({
-        sql: `SELECT id FROM attributes 
-              WHERE entity_id = ? AND attribute_name = 'approvalStatus'
+    // Update calculation approval status via EAV (only if status needs to change)
+    if (newApprovalStatus) {
+      const entityResult = await db.execute({
+        sql: `SELECT e.id as entityId 
+              FROM entities e 
+              JOIN attributes a ON e.id = a.entity_id 
+              WHERE e.table_id = ? 
+                AND a.attribute_name = 'id' 
+                AND a.string_value = ?
               LIMIT 1`,
-        args: [entityId]
+        args: [EAV_TABLES.calculations, calculationId]
       });
       
-      console.log('[updateQuoteResponse] Existing attr count:', existingAttr.rows.length);
+      console.log('[updateQuoteResponse] Entity result:', JSON.stringify(entityResult.rows));
       
-      if (existingAttr.rows.length > 0) {
-        // Update existing attribute
-        await db.execute({
-          sql: `UPDATE attributes SET string_value = ? 
-                WHERE entity_id = ? AND attribute_name = 'approvalStatus'`,
-          args: [newApprovalStatus, entityId]
+      if (entityResult.rows.length > 0) {
+        const entityId = entityResult.rows[0].entityId as string;
+        console.log('[updateQuoteResponse] Found entity:', entityId);
+        
+        // Check if approvalStatus attribute exists
+        const existingAttr = await db.execute({
+          sql: `SELECT id FROM attributes 
+                WHERE entity_id = ? AND attribute_name = 'approvalStatus'
+                LIMIT 1`,
+          args: [entityId]
         });
-        console.log('[updateQuoteResponse] Updated existing approvalStatus');
+        
+        console.log('[updateQuoteResponse] Existing attr count:', existingAttr.rows.length);
+        
+        if (existingAttr.rows.length > 0) {
+          // Update existing attribute
+          await db.execute({
+            sql: `UPDATE attributes SET string_value = ? 
+                  WHERE entity_id = ? AND attribute_name = 'approvalStatus'`,
+            args: [newApprovalStatus, entityId]
+          });
+          console.log('[updateQuoteResponse] Updated existing approvalStatus');
+        } else {
+          // Insert new attribute with all required fields
+          const attrId = crypto.randomUUID();
+          await db.execute({
+            sql: `INSERT INTO attributes (id, entity_id, attribute_name, value_type, string_value, created_at)
+                  VALUES (?, ?, 'approvalStatus', 'string', ?, ?)`,
+            args: [attrId, entityId, newApprovalStatus, Math.floor(Date.now() / 1000)]
+          });
+          console.log('[updateQuoteResponse] Inserted new approvalStatus');
+        }
       } else {
-        // Insert new attribute with all required fields
-        const attrId = crypto.randomUUID();
-        await db.execute({
-          sql: `INSERT INTO attributes (id, entity_id, attribute_name, value_type, string_value, created_at)
-                VALUES (?, ?, 'approvalStatus', 'string', ?, ?)`,
-          args: [attrId, entityId, newApprovalStatus, Math.floor(Date.now() / 1000)]
-        });
-        console.log('[updateQuoteResponse] Inserted new approvalStatus');
+        console.log('[updateQuoteResponse] No entity found for calculation');
       }
     } else {
-      console.log('[updateQuoteResponse] No entity found for calculation');
+      console.log('[updateQuoteResponse] Skipping status update (question only)');
     }
     
     // Send webhook notification to main app (for email notifications)

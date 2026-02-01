@@ -1,6 +1,16 @@
 import type { APIRoute } from 'astro';
 import { updateQuoteResponse } from '../../../../../lib/db';
 
+// Allowed actions for quote responses
+const ALLOWED_ACTIONS = [
+  'approved', 
+  'rejected', 
+  'requested_changes',
+  'question_received'  // Client asking a question
+] as const;
+
+type QuoteAction = typeof ALLOWED_ACTIONS[number];
+
 export const POST: APIRoute = async ({ params, request, redirect }) => {
   const { id, token } = params;
   
@@ -10,10 +20,11 @@ export const POST: APIRoute = async ({ params, request, redirect }) => {
   
   // Parse form data
   const formData = await request.formData();
-  const action = formData.get('action') as 'approved' | 'rejected' | 'requested_changes';
+  const action = formData.get('action') as QuoteAction;
   const comment = formData.get('comment') as string | null;
   
-  if (!action || !['approved', 'rejected', 'requested_changes'].includes(action)) {
+  if (!action || !ALLOWED_ACTIONS.includes(action)) {
+    console.error('[respond] Invalid action:', action);
     return new Response('Invalid action', { status: 400 });
   }
   

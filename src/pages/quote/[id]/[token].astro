@@ -887,7 +887,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
   if (changesBtn && quoteForm && actionInput && commentSection) {
     changesBtn.addEventListener('click', () => {
       commentSection.classList.remove('hidden');
-      actionInput.value = 'requested_changes';
+      actionInput.value = 'question_received';
       if (approveBtn) {
         approveBtn.innerHTML = `
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
