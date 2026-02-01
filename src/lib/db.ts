@@ -2452,3 +2452,109 @@ export async function getCalculationActivities(calculationId: string): Promise<C
     return [];
   }
 }
+
+// Client notification for dashboard
+export interface ClientNotification {
+  id: string;
+  type: 'question_sent' | 'status_changed' | 'waiting_for_you';
+  title: string;
+  message: string;
+  calculationId: string;
+  calculationName: string;
+  createdAt: Date;
+  shareToken?: string;
+}
+
+// Get notifications for client dashboard
+export async function getClientNotifications(
+  customerId: string, 
+  customerName: string,
+  limit: number = 10
+): Promise<ClientNotification[]> {
+  try {
+    const db = getClient();
+    
+    // Get calculations for this client
+    const calcsResult = await getClientCalculations(customerId, customerName, { limit: 50, offset: 0 });
+    const calcIds = calcsResult.items.map(c => c.id);
+    
+    if (calcIds.length === 0) {
+      return [];
+    }
+    
+    const notifications: ClientNotification[] = [];
+    
+    // Check for WAITING_FOR_CLIENT status (needs client action)
+    for (const calc of calcsResult.items) {
+      if (calc.approvalStatus === 'WAITING_FOR_CLIENT') {
+        notifications.push({
+          id: `waiting-${calc.id}`,
+          type: 'waiting_for_you',
+          title: '⏳ Čaká na Vás',
+          message: `Prosím dodajte požadované informácie k ponuke "${calc.name}"`,
+          calculationId: calc.id,
+          calculationName: calc.name,
+          createdAt: calc.updatedAt || new Date(),
+          shareToken: calc.shareToken || undefined,
+        });
+      }
+      
+      // Check for CLIENT_VIEWED status (pending approval)
+      if (calc.approvalStatus === 'CLIENT_VIEWED') {
+        notifications.push({
+          id: `pending-${calc.id}`,
+          type: 'status_changed',
+          title: '📋 Na schválenie',
+          message: `Ponuka "${calc.name}" čaká na Vaše schválenie`,
+          calculationId: calc.id,
+          calculationName: calc.name,
+          createdAt: calc.updatedAt || new Date(),
+          shareToken: calc.shareToken || undefined,
+        });
+      }
+    }
+    
+    // Get recent activities for these calculations
+    const placeholders = calcIds.map(() => '?').join(', ');
+    const activitiesResult = await db.execute({
+      sql: `SELECT id, calculation_id, action, description, metadata, created_at
+            FROM calculation_activities
+            WHERE calculation_id IN (${placeholders})
+            ORDER BY created_at DESC
+            LIMIT ?`,
+      args: [...calcIds, limit]
+    });
+    
+    for (const row of activitiesResult.rows) {
+      const calcId = row.calculation_id as string;
+      const calc = calcsResult.items.find(c => c.id === calcId);
+      
+      if (row.action === 'question_received') {
+        let comment = '';
+        try {
+          const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata as string) : row.metadata;
+          comment = meta?.comment || '';
+        } catch { /* ignore */ }
+        
+        notifications.push({
+          id: row.id as string,
+          type: 'question_sent',
+          title: '✅ Otázka odoslaná',
+          message: comment ? `"${comment.substring(0, 50)}${comment.length > 50 ? '...' : ''}"` : 'Vaša otázka bola odoslaná',
+          calculationId: calcId,
+          calculationName: calc?.name || 'Kalkulácia',
+          createdAt: new Date((row.created_at as number) * 1000),
+          shareToken: calc?.shareToken || undefined,
+        });
+      }
+    }
+    
+    // Sort by date (newest first) and limit
+    return notifications
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+  } catch (error) {
+    console.error('[getClientNotifications] Error:', error);
+    return [];
+  }
+}

@@ -1,8 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { getSessionFromCookie } from '../lib/session';
-import { getCustomerOrders } from '../lib/db';
+import { getCustomerOrders, getClientNotifications } from '../lib/db';
 import OrderCard from '../components/OrderCard.astro';
+import { format } from 'date-fns';
+import { sk } from 'date-fns/locale';
 
 // Check authentication
 const session = getSessionFromCookie(Astro.request.headers.get('cookie'));
@@ -11,8 +13,9 @@ if (!session) {
   return Astro.redirect('/');
 }
 
-// Fetch customer orders
+// Fetch customer orders and notifications
 const orders = await getCustomerOrders(session.customerId, session.customerName);
+const notifications = await getClientNotifications(session.customerId, session.customerName, 5);
 
 // Calculate stats
 const stats = {
@@ -21,6 +24,9 @@ const stats = {
   completed: orders.filter(o => o.status === 'COMPLETED').length,
   pending: orders.filter(o => o.status === 'DRAFT').length,
 };
+
+// Filter important notifications (waiting for client action)
+const importantNotifications = notifications.filter(n => n.type === 'waiting_for_you' || n.type === 'status_changed');
 ---
 
 <Layout title="Dashboard" activeNav="dashboard">
@@ -63,6 +69,52 @@ const stats = {
     </header>
     
     <div class="max-w-6xl mx-auto px-6 md:px-8">
+      <!-- Important Notifications Banner -->
+      {importantNotifications.length > 0 && (
+        <div class="mb-6 space-y-3">
+          {importantNotifications.map((notif) => {
+            const quoteUrl = notif.shareToken ? `/quote/${notif.calculationId}/${notif.shareToken}` : null;
+            const isWaiting = notif.type === 'waiting_for_you';
+            
+            return (
+              <a 
+                href={quoteUrl || '#'} 
+                class={`block adsun-card p-4 border-l-4 ${isWaiting ? 'border-l-[#f59e0b] bg-[#f59e0b]/5' : 'border-l-[#3b82f6] bg-[#3b82f6]/5'} hover:bg-opacity-10 transition-all`}
+              >
+                <div class="flex items-start gap-3">
+                  <div class={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isWaiting ? 'bg-[#f59e0b]/20' : 'bg-[#3b82f6]/20'}`}>
+                    {isWaiting ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                      </svg>
+                    )}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class={`font-semibold ${isWaiting ? 'text-[#f59e0b]' : 'text-[#3b82f6]'}`}>
+                      {notif.title}
+                    </div>
+                    <p class="text-[#9ca3af] text-sm mt-0.5 truncate">{notif.message}</p>
+                  </div>
+                  <div class="flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  </div>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      )}
+
       <!-- Stats Grid -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div class="adsun-card p-6 animate-fade-in-up">
