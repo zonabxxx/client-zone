@@ -128,7 +128,7 @@ export interface Calculation {
   calculationNumber: string;
   description: string | null;
   status: string;
-  approvalStatus: 'DRAFT' | 'CLIENT_VIEWED' | 'CLIENT_APPROVED' | 'CLIENT_REJECTED' | 'CLIENT_REQUESTED_CHANGES';
+  approvalStatus: 'DRAFT' | 'CLIENT_VIEWED' | 'CLIENT_APPROVED' | 'CLIENT_REJECTED' | 'CLIENT_REQUESTED_CHANGES' | 'WAITING_FOR_CLIENT';
   projectId: string | null;
   clientEntityId: string | null;
   totalPrice: number | null;
@@ -136,6 +136,7 @@ export interface Calculation {
   shareExpiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  calculationData?: any; // Full calculation data including clientRequestMessage
 }
 
 export interface OrderTask {
@@ -683,6 +684,7 @@ export async function getCalculationProducts(calculationId: string | null): Prom
     
     let products: any[] = [];
     let totalPrice: number | null = null;
+    let globalPricingBreakdown: any = null;
     
     for (const row of dataResult.rows) {
       const attrName = row.attribute_name as string;
@@ -701,20 +703,45 @@ export async function getCalculationProducts(calculationId: string | null): Prom
         parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
       } catch { continue; }
       
-      if (attrName === 'calculationData' && parsed?.products) {
-        products = parsed.products;
+      if (attrName === 'calculationData') {
+        if (parsed?.products) {
+          products = parsed.products;
+        }
+        // Extract global pricing breakdown for multipliers
+        if (parsed?.globalPricingBreakdown) {
+          globalPricingBreakdown = parsed.globalPricingBreakdown;
+        }
       } else if ((attrName === 'products' || attrName === 'calculationData.products') && Array.isArray(parsed)) {
         products = parsed;
       }
     }
+    
+    // Calculate combined multiplier from global pricing (client rating + delivery term)
+    const clientMultiplier = Number(globalPricingBreakdown?.clientMultiplier) || 1;
+    const deliveryMultiplier = Number(globalPricingBreakdown?.deliveryMultiplier) || 1;
+    const combinedMultiplier = clientMultiplier * deliveryMultiplier;
+    
+    // If we have a final price from global pricing, use it to calculate multiplier
+    // This works for older calculations where breakdown wasn't saved
+    const globalFinalPrice = Number(globalPricingBreakdown?.finalPrice) || 0;
+    const globalOriginalPrice = Number(globalPricingBreakdown?.originalPrice) || 0;
+    const priceRatio = (globalFinalPrice > 0 && globalOriginalPrice > 0) 
+      ? globalFinalPrice / globalOriginalPrice 
+      : combinedMultiplier;
     
     // Convert to QuoteProduct format
     const quoteProducts: QuoteProduct[] = products.map((product: any) => {
       const customFields = product.customFieldValues || product.calculatorInputValues || {};
       const dimensions = extractDimensionsFromInputFields(customFields);
       
-      // Get price from product - check multiple possible fields
-      const productTotalCost = product.totalCost || product.finalPrice || product.price || product.salePrice || 0;
+      // Get price from product - prioritize adjusted prices, then apply multiplier to base
+      // 1. Check if product already has global adjusted price
+      const adjustedPrice = product.globalAdjustedPrice || product.adjustedPrice || 0;
+      // 2. Get base price
+      const basePrice = product.totalCost || product.finalPrice || product.price || product.salePrice || 0;
+      // 3. Use adjusted price if available, otherwise apply price ratio to base price
+      const productTotalCost = adjustedPrice > 0 ? adjustedPrice : (basePrice * priceRatio);
+      
       const quantity = product.quantity || product.calculatedQuantity || 1;
       const unit = product.variant?.unit || product.unit || 'ks';
       
@@ -1159,6 +1186,18 @@ export async function getCalculationById(calculationId: string): Promise<Calcula
     
     const share = shareResult.rows[0];
     
+    // Parse calculationData if it's a string
+    let calculationData = null;
+    if (data.calculationData) {
+      try {
+        calculationData = typeof data.calculationData === 'string' 
+          ? JSON.parse(data.calculationData) 
+          : data.calculationData;
+      } catch (e) {
+        console.error('Error parsing calculationData:', e);
+      }
+    }
+
     return {
       id: data.id || '',
       entityId: entityId,
@@ -1174,6 +1213,7 @@ export async function getCalculationById(calculationId: string): Promise<Calcula
       shareExpiresAt: share ? new Date((share.expires_at as number) * 1000) : null,
       createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
       updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
+      calculationData: calculationData, // Include full calculation data for clientRequestMessage etc.
     };
   } catch (error) {
     console.error('Error getting calculation:', error);

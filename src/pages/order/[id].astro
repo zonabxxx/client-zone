@@ -2,7 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import DashboardHeader from '../../components/DashboardHeader.astro';
 import { getSessionFromCookie } from '../../lib/session';
-import { getOrderById, getOrderServices, getOrderTasks, canCustomerAccessOrder } from '../../lib/db';
+import { getOrderById, getOrderServices, getOrderTasks, canCustomerAccessOrder, getCalculationById } from '../../lib/db';
 import { format } from 'date-fns';
 import { sk } from 'date-fns/locale';
 
@@ -34,6 +34,11 @@ if (!order) {
 
 const services = await getOrderServices(id);
 const tasks = await getOrderTasks(id);
+
+// Get calculation for client request message
+const calculation = order.calculationId ? await getCalculationById(order.calculationId) : null;
+const clientRequestMessage = calculation?.calculationData?.clientRequestMessage || null;
+const isWaitingForClient = calculation?.approvalStatus === 'WAITING_FOR_CLIENT';
 
 // Calculate progress from tasks (most accurate)
 const totalTasks = tasks.length || 1;
@@ -91,6 +96,9 @@ const workflowSteps = [
 ];
 
 const currentStepIndex = workflowSteps.findIndex(s => s.key === order.status);
+
+// Don't show prices for DRAFT orders (just a concept, not confirmed yet)
+const showPrices = order.status !== 'DRAFT';
 
 // Group services by department
 interface DepartmentGroup {
@@ -161,12 +169,18 @@ const departmentIcons: Record<string, string> = {
             <h1 class="text-2xl md:text-3xl font-bold text-white">{order.name}</h1>
           </div>
           
-          {order.totalValue && order.totalValue > 0 && (
+          {showPrices && order.totalValue && order.totalValue > 0 && (
             <div class="text-right">
               <div class="text-3xl font-bold text-white">
                 {order.totalValue.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
               </div>
               <div class="text-sm text-slate-400">Celková hodnota</div>
+            </div>
+          )}
+          {!showPrices && (
+            <div class="px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+              <div class="text-amber-400 font-medium text-sm">Koncept</div>
+              <div class="text-xs text-amber-300/70">Čaká na potvrdenie</div>
             </div>
           )}
         </div>
@@ -204,6 +218,42 @@ const departmentIcons: Record<string, string> = {
           </a>
         </div>
       </div>
+
+      <!-- Client Request Message - Waiting for client -->
+      {isWaitingForClient && clientRequestMessage && (
+        <div class="glass rounded-3xl p-8 mb-6 animate-fade-in-up border-2 border-amber-500/30 bg-amber-500/5">
+          <div class="flex items-start gap-4">
+            <div class="w-14 h-14 bg-amber-500/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <svg class="w-7 h-7 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center gap-3 mb-2">
+                <h2 class="text-xl font-bold text-amber-400">Potrebujeme od Vás informácie</h2>
+                <span class="px-3 py-1 bg-amber-500/20 text-amber-400 text-sm font-medium rounded-full">
+                  Čaká na odpoveď
+                </span>
+              </div>
+              <p class="text-slate-300 mb-4">Prosím, dodajte nám nasledovné údaje:</p>
+              <div class="bg-slate-800/50 rounded-xl p-5 text-white whitespace-pre-wrap border border-amber-500/20">
+                {clientRequestMessage}
+              </div>
+              <div class="mt-4">
+                <a 
+                  href={`/order/${id}/quote`}
+                  class="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-xl transition-colors"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                  Odpovedať
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <!-- Progress section -->
       <div class="glass rounded-3xl p-8 mb-6 animate-fade-in-up stagger-1">
@@ -283,7 +333,7 @@ const departmentIcons: Record<string, string> = {
                         }`}>
                           {serviceStatusLabels[dept.status]}
                         </div>
-                        {dept.totalPrice > 0 && (
+                        {showPrices && dept.totalPrice > 0 && (
                           <div class="text-white font-semibold mt-1">
                             {dept.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
                           </div>
@@ -312,7 +362,7 @@ const departmentIcons: Record<string, string> = {
                             {service.quantity && (
                               <div class="text-xs text-slate-500">
                                 {service.quantity.toLocaleString('sk-SK', { maximumFractionDigits: 2 })} {service.unit || 'ks'}
-                                {service.salePrice && ` × ${service.salePrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €`}
+                                {showPrices && service.salePrice && ` × ${service.salePrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €`}
                               </div>
                             )}
                           </div>
@@ -321,7 +371,7 @@ const departmentIcons: Record<string, string> = {
                           <div class={`text-xs font-medium ${serviceStatusColors[service.status]}`}>
                             {serviceStatusLabels[service.status]}
                           </div>
-                          {service.totalPrice && service.totalPrice > 0 && (
+                          {showPrices && service.totalPrice && service.totalPrice > 0 && (
                             <div class="text-sm text-white font-medium">
                               {service.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
                             </div>
