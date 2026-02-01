@@ -48,10 +48,31 @@ for (const calc of calculations) {
   }
 }
 
-// Convert to array and sort by project name
+// Sort calculations within each project by date (newest first)
+for (const group of projectsMap.values()) {
+  group.calculations.sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateB - dateA; // Newest first
+  });
+}
+
+// Sort unassigned calculations by date (newest first)
+unassignedCalcs.sort((a, b) => {
+  const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+  const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+  return dateB - dateA; // Newest first
+});
+
+// Convert to array and sort by newest calculation date (newest project first)
 const groupedProjects = Array.from(projectsMap.values())
   .filter(g => g.calculations.length > 0)
-  .sort((a, b) => a.project.name.localeCompare(b.project.name));
+  .sort((a, b) => {
+    // Get the newest calculation date from each project
+    const latestA = a.calculations[0]?.createdAt ? new Date(a.calculations[0].createdAt).getTime() : 0;
+    const latestB = b.calculations[0]?.createdAt ? new Date(b.calculations[0].createdAt).getTime() : 0;
+    return latestB - latestA; // Newest project first
+  });
 
 const hasMore = result.hasMore;
 const totalCount = result.total;
