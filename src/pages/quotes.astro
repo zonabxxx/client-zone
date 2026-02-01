@@ -238,6 +238,7 @@ function formatDate(date: Date | null): string {
                       const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
                       const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
                       const hasShareLink = calc.shareToken && calc.shareExpiresAt && calc.shareExpiresAt > new Date();
+                      const hasCommunication = calc.approvalStatus === 'CLIENT_REQUESTED_CHANGES' || calc.approvalStatus === 'WAITING_FOR_CLIENT';
                       // Link to order quote page if order exists, otherwise to quote page with token
                       const quoteUrl = calc.orderId 
                         ? `/order/${calc.orderId}/quote?from=quotes` 
@@ -251,10 +252,18 @@ function formatDate(date: Date | null): string {
                       >
                         <div class="flex items-center justify-between gap-3">
                           <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-1">
+                            <div class="flex items-center gap-2 mb-1 flex-wrap">
                               <span class={`px-2 py-0.5 md:px-2.5 md:py-1 rounded-md text-xs font-medium ${status.cssClass}`}>
                                 {status.label}
                               </span>
+                              {hasCommunication && (
+                                <span class="px-2 py-0.5 md:px-2.5 md:py-1 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 flex items-center gap-1 animate-pulse">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                  </svg>
+                                  Komunikácia
+                                </span>
+                              )}
                             </div>
                             <h4 class={`text-sm md:text-base font-medium truncate ${isApproved ? 'text-[#4ade80]' : 'text-white'}`}>{calc.name}</h4>
                             <div class="text-xs text-[#6b7280] mt-1 flex items-center gap-1">
@@ -315,6 +324,7 @@ function formatDate(date: Date | null): string {
                     const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
                     const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
                     const hasShareLink = calc.shareToken && calc.shareExpiresAt && calc.shareExpiresAt > new Date();
+                    const hasCommunication = calc.approvalStatus === 'CLIENT_REQUESTED_CHANGES' || calc.approvalStatus === 'WAITING_FOR_CLIENT';
                     // Link to order quote page if order exists, otherwise to quote page with token
                     const quoteUrl = calc.orderId 
                       ? `/order/${calc.orderId}/quote?from=quotes` 
@@ -328,10 +338,18 @@ function formatDate(date: Date | null): string {
                       >
                         <div class="flex items-center justify-between gap-4">
                           <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-1">
+                            <div class="flex items-center gap-2 mb-1 flex-wrap">
                               <span class={`px-2.5 py-1 rounded-md text-xs font-medium ${status.cssClass}`}>
                                 {status.label}
                               </span>
+                              {hasCommunication && (
+                                <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 flex items-center gap-1 animate-pulse">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                  </svg>
+                                  Komunikácia
+                                </span>
+                              )}
                             </div>
                             <h4 class={`font-medium truncate ${isApproved ? 'text-[#4ade80]' : 'text-white'}`}>{calc.name}</h4>
                             <div class="text-xs text-[#6b7280] mt-1">{formatDate(calc.updatedAt)}</div>
