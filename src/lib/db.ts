@@ -193,6 +193,7 @@ export async function getCustomerOrders(customerId: string, customerName: string
         SELECT 
           id, order_number as orderNumber, name, status, priority,
           client_name as clientName, client_entity_id as clientEntityId,
+          calculation_id as calculationId,
           total_value as totalValue, services_count as servicesCount,
           start_date as startDate, planned_end_date as plannedEndDate,
           actual_end_date as actualEndDate,
@@ -212,6 +213,7 @@ export async function getCustomerOrders(customerId: string, customerName: string
       priority: row.priority as Order['priority'],
       clientName: row.clientName as string | null,
       clientEntityId: row.clientEntityId as string | null,
+      calculationId: row.calculationId as string | null,
       totalValue: row.totalValue as number | null,
       servicesCount: row.servicesCount as number | null,
       // SQLite timestamps are in seconds, JS Date expects milliseconds
@@ -1249,6 +1251,7 @@ export async function getOrderByCalculationId(calculationId: string): Promise<Or
           calculation_id as calculationId,
           total_value as totalValue, services_count as servicesCount,
           start_date as startDate, planned_end_date as plannedEndDate,
+          actual_end_date as actualEndDate,
           created_at as createdAt, updated_at as updatedAt
         FROM orders_v2 
         WHERE calculation_id = ?
@@ -1264,8 +1267,8 @@ export async function getOrderByCalculationId(calculationId: string): Promise<Or
       id: row.id as string,
       orderNumber: row.orderNumber as string,
       name: row.name as string,
-      status: row.status as string,
-      priority: row.priority as number || 0,
+      status: row.status as Order['status'],
+      priority: row.priority as Order['priority'],
       clientName: row.clientName as string | null,
       clientEntityId: row.clientEntityId as string | null,
       calculationId: row.calculationId as string | null,
@@ -1273,6 +1276,7 @@ export async function getOrderByCalculationId(calculationId: string): Promise<Or
       servicesCount: row.servicesCount as number | null,
       startDate: row.startDate ? new Date((row.startDate as number) * 1000) : null,
       plannedEndDate: row.plannedEndDate ? new Date((row.plannedEndDate as number) * 1000) : null,
+      actualEndDate: row.actualEndDate ? new Date((row.actualEndDate as number) * 1000) : null,
       createdAt: row.createdAt ? new Date((row.createdAt as number) * 1000) : new Date(),
       updatedAt: row.updatedAt ? new Date((row.updatedAt as number) * 1000) : new Date(),
     };
@@ -1926,8 +1930,8 @@ export async function getCustomerRating(customerId: string): Promise<CustomerRat
     if (row.ratingBadges) {
       try {
         ratingBadges = typeof row.ratingBadges === 'string' 
-          ? JSON.parse(row.ratingBadges) 
-          : row.ratingBadges as string[];
+          ? JSON.parse(row.ratingBadges as string) 
+          : (row.ratingBadges as unknown as string[]);
       } catch { /* ignore */ }
     }
     
@@ -1935,8 +1939,8 @@ export async function getCustomerRating(customerId: string): Promise<CustomerRat
     if (row.ratingDetails) {
       try {
         ratingDetails = typeof row.ratingDetails === 'string' 
-          ? JSON.parse(row.ratingDetails) 
-          : row.ratingDetails as CustomerRating['ratingDetails'];
+          ? JSON.parse(row.ratingDetails as string) 
+          : (row.ratingDetails as unknown as CustomerRating['ratingDetails']);
       } catch { /* ignore */ }
     }
     
@@ -1998,7 +2002,7 @@ export async function getGlobalClientRatingRules(organizationId: string): Promis
     
     try {
       // Config might be double-escaped JSON (string containing JSON string)
-      let config = configRaw;
+      let config: any = configRaw;
       
       // First parse if it's a string
       if (typeof config === 'string') {
@@ -2010,7 +2014,7 @@ export async function getGlobalClientRatingRules(organizationId: string): Promis
         config = JSON.parse(config);
       }
       
-      const globalClientRating = config.globalClientRating || [];
+      const globalClientRating = config?.globalClientRating || [];
       console.log('Loaded global client rating rules:', globalClientRating.length);
       return globalClientRating as GlobalClientRatingRule[];
     } catch (parseError) {
