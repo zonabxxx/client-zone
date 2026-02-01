@@ -305,30 +305,36 @@ const clientName = contactFullName || companyName;
 // Get VAT rate - 0% for German (reverse charge for EU B2B)
 const vatRate = isGerman ? 0 : (organization?.vatRate ?? 20);
 
-// Calculate totals
+// Get global pricing multipliers (client rating + delivery term)
+const globalPricing = calculationData.globalPricingBreakdown || {};
+const clientMultiplier = Number(globalPricing.clientMultiplier) || 1;
+const deliveryMultiplier = Number(globalPricing.deliveryMultiplier) || 1;
+const combinedMultiplier = clientMultiplier * deliveryMultiplier;
+
+// Calculate totals - apply global pricing multiplier
 const computeProductTotal = (p: any): number => {
   // 1. Priorita: Uložená totalCost hodnota (správna celková cena produktu)
   const stored = Number(p?.totalCost) || 0;
-  if (stored > 0) return stored;
+  if (stored > 0) return stored * combinedMultiplier;
   
   // 2. Fallback: finalPrice alebo price z produktu (tiež celková cena)
   const productPrice = Number(p?.finalPrice) || Number(p?.price) || 0;
-  if (productPrice > 0) return productPrice;
+  if (productPrice > 0) return productPrice * combinedMultiplier;
   
   // 3. Fallback: unitSalePrice × quantity (jednotková cena × množstvo)
   const qty = Number(p?.quantity) || 1;
   const unitPrice = Number(p?.variant?.unitSalePrice) || Number(p?.unitPrice) || 0;
-  if (unitPrice > 0) return unitPrice * qty;
+  if (unitPrice > 0) return unitPrice * qty * combinedMultiplier;
   
   // 4. Posledná možnosť: basePrice (ale NIE násobené qty, pretože basePrice je často celková cena)
   // POZOR: variant.salePrice je "Total for X variants" - NENÁSOBIŤ s quantity!
   const basePrice = Number(p?.variant?.basePrice) || 0;
-  return basePrice; // Vráť bez násobenia - basePrice je už celková suma
+  return basePrice * combinedMultiplier; // Apply multiplier to base price
 };
 
 const productTotal = products.reduce((sum: number, p: any) => sum + computeProductTotal(p), 0);
-const serviceTotal = services.reduce((sum: number, s: any) => sum + (Number(s.calculatedCost) || 0), 0);
-const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalCost) || 0), 0);
+const serviceTotal = services.reduce((sum: number, s: any) => sum + (Number(s.calculatedCost) || 0) * combinedMultiplier, 0);
+const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalCost) || 0) * combinedMultiplier, 0);
 
 const totalAmount = Number(calculation.totalPrice) || Number(calculationData.actualTotalPrice) || (productTotal + serviceTotal + materialTotal);
 const vatAmount = totalAmount * (vatRate / 100);
