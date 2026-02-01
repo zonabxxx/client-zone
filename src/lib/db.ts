@@ -1489,15 +1489,25 @@ export async function updateQuoteResponse(
     const newApprovalStatus = approvalStatusMap[action];
     console.log('[updateQuoteResponse] New approval status:', newApprovalStatus);
     
-    // Update share with response - only update status, not other columns that might not exist
+    // Update share with response, comment, and timestamp
     try {
       await db.execute({
         sql: `UPDATE calculation_shares 
-              SET status = ?
+              SET status = ?,
+                  client_response = ?,
+                  client_comment = ?,
+                  responded_at = ?
               WHERE calculation_id = ? AND token = ?`,
-        args: [action === 'approved' ? 'responded' : 'active', calculationId, token]
+        args: [
+          action === 'approved' ? 'responded' : 'active',
+          action,
+          comment || null,
+          Math.floor(Date.now() / 1000),
+          calculationId,
+          token
+        ]
       });
-      console.log('[updateQuoteResponse] Share status updated');
+      console.log('[updateQuoteResponse] Share status updated with comment');
     } catch (shareUpdateError) {
       console.error('[updateQuoteResponse] Error updating share status:', shareUpdateError);
       // Continue anyway - the main goal is to update the calculation status
@@ -1551,6 +1561,25 @@ export async function updateQuoteResponse(
       }
     } else {
       console.log('[updateQuoteResponse] No entity found for calculation');
+    }
+    
+    // Send webhook notification to main app (for email notifications)
+    try {
+      const webhookUrl = import.meta.env.PUBLIC_MAIN_APP_URL || 'https://business-flow-ai.up.railway.app';
+      await fetch(`${webhookUrl}/api/webhooks/quote-response`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          calculationId,
+          action,
+          comment: comment || null,
+          respondedAt: new Date().toISOString()
+        })
+      });
+      console.log('[updateQuoteResponse] Webhook notification sent');
+    } catch (webhookError) {
+      console.error('[updateQuoteResponse] Failed to send webhook (non-blocking):', webhookError);
+      // Don't fail the whole operation if webhook fails
     }
     
     console.log('[updateQuoteResponse] SUCCESS');
