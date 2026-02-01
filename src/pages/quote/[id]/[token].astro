@@ -69,6 +69,9 @@ const translations = {
     backToList: 'Späť na zoznam ponúk',
     allRightsReserved: 'Všetky práva vyhradené',
     pcs: 'ks',
+    waitingForClient: 'Čakáme na vaše údaje',
+    weNeedFromYou: 'Potrebujeme od vás',
+    pleaseProvide: 'Prosím dodajte nasledovné údaje:',
   },
   'de-AT': {
     quoteTitle: 'Angebot',
@@ -111,6 +114,9 @@ const translations = {
     backToList: 'Zurück zur Angebotsliste',
     allRightsReserved: 'Alle Rechte vorbehalten',
     pcs: 'Stk.',
+    waitingForClient: 'Wir warten auf Ihre Daten',
+    weNeedFromYou: 'Wir benötigen von Ihnen',
+    pleaseProvide: 'Bitte senden Sie uns folgende Informationen:',
   },
 };
 
@@ -360,6 +366,10 @@ function formatDate(date: Date | string | null): string {
   }
 }
 
+// Client request message (when waiting for client data)
+const clientRequestMessage = calculationData.clientRequestMessage || null;
+const isWaitingForClient = calculation.approvalStatus === 'WAITING_FOR_CLIENT';
+
 // Approval status config - use translations
 const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
   'DRAFT': { label: t.inPreparation, color: 'text-slate-400', bgColor: 'bg-slate-500/20', icon: '📝' },
@@ -367,6 +377,7 @@ const statusConfig: Record<string, { label: string; color: string; bgColor: stri
   'CLIENT_APPROVED': { label: t.approved, color: 'text-emerald-400', bgColor: 'bg-emerald-500/20', icon: '✅' },
   'CLIENT_REJECTED': { label: t.rejected, color: 'text-red-400', bgColor: 'bg-red-500/20', icon: '❌' },
   'CLIENT_REQUESTED_CHANGES': { label: t.changesRequested, color: 'text-orange-400', bgColor: 'bg-orange-500/20', icon: '✏️' },
+  'WAITING_FOR_CLIENT': { label: t.waitingForClient, color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: '⏳' },
 };
 
 // Check for responded query param (just submitted)
@@ -421,6 +432,35 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
           </span>
         </div>
       </div>
+
+      {/* Waiting for Client - Request Message */}
+      {isWaitingForClient && clientRequestMessage && (
+        <div class="glass rounded-2xl p-6 mb-6 animate-fade-in-up border-2 border-amber-500/30 bg-amber-500/5">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+              <svg class="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-lg font-semibold text-amber-400 mb-1">
+                {t.weNeedFromYou}
+              </h3>
+              <p class="text-slate-300 text-sm mb-3">
+                {t.pleaseProvide}
+              </p>
+              <div class="bg-slate-800/50 rounded-lg p-4 text-white whitespace-pre-wrap">
+                {clientRequestMessage}
+              </div>
+              <p class="text-xs text-slate-500 mt-3">
+                {isGerman 
+                  ? 'Bitte antworten Sie unten mit den angeforderten Informationen oder Dateien.'
+                  : 'Prosím odpovedzte nižšie s požadovanými informáciami alebo súbormi.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Expired State */}
       {isExpired && (
