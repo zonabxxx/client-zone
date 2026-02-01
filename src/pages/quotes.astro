@@ -237,15 +237,16 @@ function formatDate(date: Date | null): string {
                     {group.calculations.map((calc) => {
                       const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
                       const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
-                      // Link to order quote page if order exists, otherwise to calculation detail
+                      const hasShareLink = calc.shareToken && calc.shareExpiresAt && calc.shareExpiresAt > new Date();
+                      // Link to order quote page if order exists, otherwise to quote page with token
                       const quoteUrl = calc.orderId 
                         ? `/order/${calc.orderId}/quote?from=quotes` 
-                        : `/calculation/${calc.id}`;
+                        : (hasShareLink ? `/quote/${calc.id}/${calc.shareToken}` : null);
                       
                       return (
                       <a 
-                        href={quoteUrl}
-                        class={`calculation-card block rounded-lg p-3 md:p-4 transition-all cursor-pointer ${isApproved ? 'bg-[#22c55e]/10 hover:bg-[#22c55e]/20 border border-[#22c55e]/30' : 'bg-[#1a1a1a] hover:bg-[#2a2a2a]'}`}
+                        href={quoteUrl || '#'}
+                        class={`calculation-card block rounded-lg p-3 md:p-4 transition-all ${quoteUrl ? 'cursor-pointer' : 'cursor-default opacity-60'} ${isApproved ? 'bg-[#22c55e]/10 hover:bg-[#22c55e]/20 border border-[#22c55e]/30' : 'bg-[#1a1a1a] hover:bg-[#2a2a2a]'}`}
                         data-status={calc.approvalStatus}
                       >
                         <div class="flex items-center justify-between gap-3">
@@ -313,15 +314,16 @@ function formatDate(date: Date | null): string {
                   {unassignedCalcs.map((calc) => {
                     const status = statusConfig[calc.approvalStatus] || statusConfig['DRAFT'];
                     const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
-                    // Link to order quote page if order exists, otherwise to calculation detail
+                    const hasShareLink = calc.shareToken && calc.shareExpiresAt && calc.shareExpiresAt > new Date();
+                    // Link to order quote page if order exists, otherwise to quote page with token
                     const quoteUrl = calc.orderId 
                       ? `/order/${calc.orderId}/quote?from=quotes` 
-                      : `/calculation/${calc.id}`;
+                      : (hasShareLink ? `/quote/${calc.id}/${calc.shareToken}` : null);
                     
                     return (
                       <a 
-                        href={quoteUrl}
-                        class={`calculation-card block rounded-lg p-4 transition-all cursor-pointer ${isApproved ? 'bg-[#22c55e]/10 hover:bg-[#22c55e]/20 border border-[#22c55e]/30' : 'bg-[#1a1a1a] hover:bg-[#2a2a2a]'}`}
+                        href={quoteUrl || '#'}
+                        class={`calculation-card block rounded-lg p-4 transition-all ${quoteUrl ? 'cursor-pointer' : 'cursor-default opacity-60'} ${isApproved ? 'bg-[#22c55e]/10 hover:bg-[#22c55e]/20 border border-[#22c55e]/30' : 'bg-[#1a1a1a] hover:bg-[#2a2a2a]'}`}
                         data-status={calc.approvalStatus}
                       >
                         <div class="flex items-center justify-between gap-4">
