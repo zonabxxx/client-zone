@@ -365,7 +365,11 @@ const computeBaseProductTotal = (p: any): number => {
 };
 
 const baseProductTotal = products.reduce((sum: number, p: any) => sum + computeBaseProductTotal(p), 0);
-const serviceTotal = services.reduce((sum: number, s: any) => sum + (Number(s.calculatedCost) || 0) * combinedMultiplier, 0);
+// Use SALE price for services: totalSale or calculatedPrice, NOT calculatedCost
+const serviceTotal = services.reduce((sum: number, s: any) => {
+  const salePrice = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
+  return sum + salePrice * combinedMultiplier;
+}, 0);
 const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalCost) || 0) * combinedMultiplier, 0);
 const baseTotal = baseProductTotal + serviceTotal + materialTotal;
 
@@ -690,12 +694,16 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                   {t.services}
                 </h4>
                 <div class="space-y-2">
-                  {services.map((s: any, idx: number) => (
-                    <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
-                      <span class="text-slate-300 font-medium">{getServiceName(s) || (isGerman ? 'Dienstleistung' : 'Služba')}</span>
-                      <span class="font-semibold text-white">{formatCurrency(Number(s.calculatedCost) || 0)}</span>
-                    </div>
-                  ))}
+                  {services.map((s: any, idx: number) => {
+                    // Use SALE price: totalSale or calculatedPrice, NOT calculatedCost
+                    const salePrice = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
+                    return (
+                      <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
+                        <span class="text-slate-300 font-medium">{getServiceName(s) || (isGerman ? 'Dienstleistung' : 'Služba')}</span>
+                        <span class="font-semibold text-white">{formatCurrency(salePrice)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -793,6 +801,19 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                 </p>
               </div>
             )}
+
+            {/* PDF Download Button */}
+            <div class="p-4 border-t border-slate-700/50 flex justify-center">
+              <a 
+                href={`/api/quote/${id}/${token}/pdf`}
+                class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-semibold rounded-xl transition-all shadow-lg shadow-amber-600/20"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {isGerman ? 'PDF herunterladen' : 'Stiahnuť PDF'}
+              </a>
+            </div>
 
             {/* Action Buttons */}
             {!isApproved && !justResponded && (
