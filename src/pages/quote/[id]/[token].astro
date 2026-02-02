@@ -348,32 +348,37 @@ const clientMultiplier = Number(globalPricing.clientMultiplier) || 1;
 const deliveryMultiplier = Number(globalPricing.deliveryMultiplier) || 1;
 const combinedMultiplier = clientMultiplier * deliveryMultiplier;
 
-// Calculate totals - apply global pricing multiplier
-const computeProductTotal = (p: any): number => {
-  // 1. Priorita: Uložená totalCost hodnota (správna celková cena produktu)
-  const stored = Number(p?.totalCost) || 0;
-  if (stored > 0) return stored * combinedMultiplier;
-  
-  // 2. Fallback: finalPrice alebo price z produktu (tiež celková cena)
+// Get the final total amount (with all markups including referrer commission)
+const totalAmount = Number(calculation.totalPrice) || Number(calculationData.actualTotalPrice) || 0;
+
+// Calculate base totals without referrer markup
+const computeBaseProductTotal = (p: any): number => {
+  const salePrice = Number(p?.totalSale) || Number(p?.originalSalePrice) || 0;
+  if (salePrice > 0) return salePrice * combinedMultiplier;
   const productPrice = Number(p?.finalPrice) || Number(p?.price) || 0;
   if (productPrice > 0) return productPrice * combinedMultiplier;
-  
-  // 3. Fallback: unitSalePrice × quantity (jednotková cena × množstvo)
   const qty = Number(p?.quantity) || 1;
   const unitPrice = Number(p?.variant?.unitSalePrice) || Number(p?.unitPrice) || 0;
   if (unitPrice > 0) return unitPrice * qty * combinedMultiplier;
-  
-  // 4. Posledná možnosť: basePrice (ale NIE násobené qty, pretože basePrice je často celková cena)
-  // POZOR: variant.salePrice je "Total for X variants" - NENÁSOBIŤ s quantity!
   const basePrice = Number(p?.variant?.basePrice) || 0;
-  return basePrice * combinedMultiplier; // Apply multiplier to base price
+  return basePrice * combinedMultiplier;
+};
+
+const baseProductTotal = products.reduce((sum: number, p: any) => sum + computeBaseProductTotal(p), 0);
+const serviceTotal = services.reduce((sum: number, s: any) => sum + (Number(s.calculatedCost) || 0) * combinedMultiplier, 0);
+const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalCost) || 0) * combinedMultiplier, 0);
+const baseTotal = baseProductTotal + serviceTotal + materialTotal;
+
+// Calculate markup ratio (includes referrer commission)
+const markupRatio = (totalAmount > 0 && baseTotal > 0) ? totalAmount / baseTotal : 1;
+
+// Final product total function - applies proportional markup
+const computeProductTotal = (p: any): number => {
+  const basePrice = computeBaseProductTotal(p);
+  return basePrice * markupRatio; // Apply proportional markup including referrer
 };
 
 const productTotal = products.reduce((sum: number, p: any) => sum + computeProductTotal(p), 0);
-const serviceTotal = services.reduce((sum: number, s: any) => sum + (Number(s.calculatedCost) || 0) * combinedMultiplier, 0);
-const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalCost) || 0) * combinedMultiplier, 0);
-
-const totalAmount = Number(calculation.totalPrice) || Number(calculationData.actualTotalPrice) || (productTotal + serviceTotal + materialTotal);
 const vatAmount = totalAmount * (vatRate / 100);
 const totalWithVat = totalAmount + vatAmount;
 

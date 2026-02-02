@@ -2,7 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import DashboardHeader from '../../components/DashboardHeader.astro';
 import { getSessionFromCookie } from '../../lib/session';
-import { getCalculationById, getCalculationProducts, getCalculationActivities, canCustomerAccessCalculation, getCalculationShareLink } from '../../lib/db';
+import { getCalculationById, getCalculationProducts, getCalculationActivities } from '../../lib/db';
 import { format } from 'date-fns';
 import { sk } from 'date-fns/locale';
 
@@ -16,27 +16,21 @@ if (!session) {
 const { id } = Astro.params;
 
 if (!id) {
-  return Astro.redirect('/calculations');
+  return Astro.redirect('/quotes');
 }
 
-// Verify access
-const hasAccess = await canCustomerAccessCalculation(session.customerId, session.customerName, id);
-if (!hasAccess) {
-  return Astro.redirect('/calculations');
-}
-
-// Fetch calculation data
+// Get calculation
 const calculation = await getCalculationById(id);
 
 if (!calculation) {
-  return Astro.redirect('/calculations');
+  return Astro.redirect('/quotes');
 }
 
-// Get products
-const products = await getCalculationProducts(id);
+// Access is already verified by getClientCalculations in quotes.astro
+// If the calculation exists, the authenticated user should have access
 
-// Get share link
-const shareLink = await getCalculationShareLink(id);
+// Get products from calculation
+const products = await getCalculationProducts(id);
 
 // Get communication history
 const activities = await getCalculationActivities(id);
@@ -47,27 +41,32 @@ const communicationActivities = activities.filter(a =>
   a.action === 'client_rejected'
 );
 
-// Get client request message
-const clientRequestMessage = calculation.calculationData?.clientRequestMessage || null;
-const isWaitingForClient = calculation.approvalStatus === 'WAITING_FOR_CLIENT';
-
 // Status config
 const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
   'DRAFT': { label: 'V príprave', color: 'text-slate-400', bgColor: 'bg-slate-500/20', icon: '📝' },
-  'SENT_TO_CLIENT': { label: 'Odoslaná', color: 'text-blue-400', bgColor: 'bg-blue-500/20', icon: '📤' },
   'CLIENT_VIEWED': { label: 'Čaká na schválenie', color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: '⏳' },
   'CLIENT_APPROVED': { label: 'Schválené', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20', icon: '✅' },
   'CLIENT_REJECTED': { label: 'Zamietnuté', color: 'text-red-400', bgColor: 'bg-red-500/20', icon: '❌' },
   'CLIENT_REQUESTED_CHANGES': { label: 'Požadované zmeny', color: 'text-orange-400', bgColor: 'bg-orange-500/20', icon: '✏️' },
   'WAITING_FOR_CLIENT': { label: 'Čaká na Vás', color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: '⏳' },
 };
-const currentStatus = statusConfig[calculation.approvalStatus] || statusConfig['DRAFT'];
+
+const approvalStatus = calculation.approvalStatus || 'DRAFT';
+const currentStatus = statusConfig[approvalStatus] || statusConfig['DRAFT'];
+const isApproved = approvalStatus === 'CLIENT_APPROVED';
+const clientRequestMessage = calculation.calculationData?.clientRequestMessage || null;
+const isWaitingForClient = approvalStatus === 'WAITING_FOR_CLIENT';
 
 // Calculate totals
-const vatRate = 23;
+const vatRate = 20;
 const subtotal = Math.round(products.reduce((sum, p) => sum + (p.totalPrice || 0), 0) * 100) / 100;
 const vatAmount = Math.round(subtotal * (vatRate / 100) * 100) / 100;
 const totalWithVat = Math.round((subtotal + vatAmount) * 100) / 100;
+
+// Use calculation total if available
+const displayTotal = calculation.totalPrice || subtotal;
+const displayVat = Math.round(displayTotal * (vatRate / 100) * 100) / 100;
+const displayTotalWithVat = Math.round((displayTotal + displayVat) * 100) / 100;
 
 function formatDate(date: Date | number | null): string {
   if (!date) return '—';
@@ -80,88 +79,113 @@ function formatDate(date: Date | number | null): string {
 }
 ---
 
-<Layout title={`Kalkulácia - ${calculation.name}`}>
+<Layout title={`Cenová ponuka - ${calculation.name}`}>
   <main class="min-h-screen">
     <DashboardHeader customerName={session.customerName} />
     
     <div class="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
       <!-- Back button -->
-      <a href="/calculations" class="inline-flex items-center gap-1.5 sm:gap-2 text-slate-400 hover:text-white transition-colors mb-4 sm:mb-6 text-sm sm:text-base">
+      <a href="/quotes" class="inline-flex items-center gap-1.5 sm:gap-2 text-slate-400 hover:text-white transition-colors mb-4 sm:mb-6 text-sm sm:text-base">
         <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
-        Späť na zoznam
+        Späť na cenové ponuky
       </a>
 
-      <!-- Header -->
-      <div class="glass rounded-2xl sm:rounded-3xl p-4 sm:p-8 mb-4 sm:mb-6 animate-fade-in-up">
-        <div class="text-center mb-6">
-          <div class="flex flex-wrap items-center justify-center gap-2 mb-4">
-            <div class="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/20 rounded-full text-blue-400 text-sm font-medium">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      <!-- Quote header -->
+      <div class:list={[
+        "rounded-2xl sm:rounded-3xl p-4 sm:p-8 mb-4 sm:mb-6 animate-fade-in-up",
+        isApproved ? "bg-emerald-500/10 border-2 border-emerald-500/30" : "glass"
+      ]}>
+        <div class="text-center mb-6 sm:mb-8">
+          <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+            <div class="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-blue-500/20 rounded-full text-blue-400 text-xs sm:text-sm font-medium">
+              <svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               Cenová ponuka
             </div>
-            <div class={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${currentStatus.bgColor} ${currentStatus.color}`}>
+            <div class={`inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium ${currentStatus.bgColor} ${currentStatus.color}`}>
               <span>{currentStatus.icon}</span>
               {currentStatus.label}
             </div>
           </div>
-          <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2">{calculation.name}</h1>
+          <h1 class="text-lg sm:text-2xl md:text-3xl font-bold text-white mb-1 sm:mb-2 px-2 break-words hyphens-auto leading-tight">{calculation.name}</h1>
           {calculation.calculationNumber && (
-            <p class="text-slate-400 text-sm">Číslo: {calculation.calculationNumber}</p>
+            <p class="text-slate-400 text-sm sm:text-base">Číslo: {calculation.calculationNumber}</p>
           )}
-        </div>
+          
+          {isApproved && (
+            <div class="mt-3 sm:mt-4 inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-emerald-500/20 rounded-full text-emerald-400 text-xs sm:text-sm">
+              <svg class="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+              <span class="hidden sm:inline">Táto ponuka bola schválená.</span>
+              <span class="sm:hidden">Schválené</span>
+            </div>
+          )}
 
-        <!-- Waiting for Client - Request Message -->
-        {isWaitingForClient && clientRequestMessage && (
-          <div class="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl mb-6">
-            <div class="flex items-start gap-3">
-              <div class="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div class="flex-1">
-                <h4 class="text-amber-400 font-semibold text-sm mb-1">Potrebujeme od Vás</h4>
-                <p class="text-slate-400 text-xs mb-2">Prosím dodajte nasledovné údaje:</p>
-                <div class="bg-slate-800/50 rounded-lg p-3 text-white whitespace-pre-wrap text-sm">
-                  {clientRequestMessage}
+          {/* Waiting for Client - Request Message */}
+          {isWaitingForClient && clientRequestMessage && (
+            <div class="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left">
+              <div class="flex items-start gap-3">
+                <div class="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <h4 class="text-amber-400 font-semibold text-sm mb-1">Potrebujeme od Vás</h4>
+                  <p class="text-slate-400 text-xs mb-2">Prosím dodajte nasledovné údaje:</p>
+                  <div class="bg-slate-800/50 rounded-lg p-3 text-white whitespace-pre-wrap text-sm">
+                    {clientRequestMessage}
+                  </div>
                 </div>
               </div>
             </div>
+          )}
+        </div>
+        
+        <!-- Price Summary -->
+        <div class="glass-light rounded-xl p-4 sm:p-6 mb-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-white font-semibold">Cenový súhrn</h3>
           </div>
-        )}
+          
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between text-slate-400">
+              <span>Medzisúčet bez DPH</span>
+              <span class="text-white">{displayTotal.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span>DPH {vatRate}%</span>
+              <span class="text-white">{displayVat.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</span>
+            </div>
+            <div class="border-t border-slate-700 pt-2 mt-2">
+              <div class="flex justify-between">
+                <span class="text-white font-semibold">Celkom s DPH</span>
+                <span class="text-[#f59e0b] font-bold text-lg">{displayTotalWithVat.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- Products -->
         {products.length > 0 && (
-          <div class="mb-6">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                  <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clip-rule="evenodd" />
-                </svg>
-              </span>
-              <span class="text-sm font-semibold text-white uppercase tracking-wider">Produkty</span>
-            </div>
-            
+          <div class="glass-light rounded-xl p-4 sm:p-6">
+            <h3 class="text-white font-semibold mb-4">Produkty ({products.length})</h3>
             <div class="space-y-3">
               {products.map((product) => (
-                <div class="glass-light rounded-xl p-4">
-                  <div class="flex justify-between items-start gap-2">
-                    <div class="flex-1 min-w-0">
-                      <div class="text-white font-semibold text-lg">{product.name}</div>
-                      <div class="text-sm text-slate-400 mt-1">
-                        × {product.quantity.toLocaleString('sk-SK', { maximumFractionDigits: 2 })} {product.unit}
-                      </div>
-                    </div>
-                    <div class="text-right flex-shrink-0">
-                      <div class="text-xl font-bold text-emerald-400">
-                        {product.totalPrice.toLocaleString('sk-SK', { minimumFractionDigits: 0 })} €
-                      </div>
-                    </div>
+                <div class="flex justify-between items-start p-3 bg-slate-800/50 rounded-lg">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-white font-medium truncate">{product.name}</p>
+                    {product.dimensions && (
+                      <p class="text-slate-400 text-xs mt-1">{product.dimensions}</p>
+                    )}
+                    <p class="text-slate-500 text-xs mt-1">{product.quantity}× ks</p>
+                  </div>
+                  <div class="text-right ml-4">
+                    <p class="text-[#f59e0b] font-semibold">{(product.totalPrice || 0).toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</p>
                   </div>
                 </div>
               ))}
@@ -169,31 +193,16 @@ function formatDate(date: Date | number | null): string {
           </div>
         )}
 
-        <!-- Totals -->
-        <div class="border-t border-slate-700/50 pt-6">
-          <div class="space-y-2 text-sm mb-4">
-            <div class="flex justify-between text-slate-400">
-              <span>Medzisúčet bez DPH</span>
-              <span>{subtotal.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</span>
-            </div>
-            <div class="flex justify-between text-slate-400">
-              <span>DPH {vatRate}%</span>
-              <span>{vatAmount.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €</span>
-            </div>
+        {products.length === 0 && (
+          <div class="glass-light rounded-xl p-6 text-center">
+            <p class="text-slate-400">Detaily produktov nie sú k dispozícii.</p>
           </div>
-          
-          <div class="text-center">
-            <div class="text-3xl sm:text-4xl font-bold text-emerald-400 mb-1">
-              {totalWithVat.toLocaleString('sk-SK', { minimumFractionDigits: 2 })} €
-            </div>
-            <div class="text-sm text-slate-400">vrátane DPH {vatRate}%</div>
-          </div>
-        </div>
+        )}
       </div>
 
       <!-- Communication History -->
       {communicationActivities.length > 0 && (
-        <div class="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6 mb-6 animate-fade-in-up">
+        <div class="glass rounded-2xl p-4 sm:p-6 mb-6">
           <div class="flex items-center gap-3 mb-4">
             <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
               <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,7 +215,6 @@ function formatDate(date: Date | number | null): string {
             {communicationActivities.map((activity) => {
               const isQuestion = activity.action === 'question_received' || activity.action === 'client_requested_changes';
               const isApproval = activity.action === 'client_approved';
-              const isRejection = activity.action === 'client_rejected';
               
               return (
                 <div class={`rounded-xl p-4 ${isQuestion ? 'bg-amber-500/10 border border-amber-500/20' : isApproval ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
@@ -228,7 +236,7 @@ function formatDate(date: Date | number | null): string {
                     </div>
                     <div class="flex-1 min-w-0">
                       <div class={`text-sm font-medium ${isQuestion ? 'text-amber-300' : isApproval ? 'text-emerald-300' : 'text-red-300'}`}>
-                        {isQuestion ? 'Vaša otázka' : isApproval ? 'Schválili ste ponuku' : 'Zamietli ste ponuku'}
+                        {isQuestion ? 'Vaša otázka' : isApproval ? 'Schválené' : 'Zamietnuté'}
                       </div>
                       {activity.comment && (
                         <p class="text-slate-300 text-sm mt-1 whitespace-pre-wrap">"{activity.comment}"</p>
@@ -244,30 +252,6 @@ function formatDate(date: Date | number | null): string {
           </div>
         </div>
       )}
-
-      <!-- Action buttons -->
-      {shareLink && (
-        <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <a 
-            href={shareLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-semibold rounded-xl transition-all shadow-lg shadow-emerald-600/20"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Zobraziť detailnú ponuku
-          </a>
-        </div>
-      )}
     </div>
   </main>
 </Layout>
-
-<style>
-  .glass-light {
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(10px);
-  }
-</style>

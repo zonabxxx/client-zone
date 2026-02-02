@@ -29,6 +29,15 @@ const calculationsWithOrders = await Promise.all(
 const calculations = calculationsWithOrders;
 const projects = projectsResult.items;
 
+// Debug: log calculations with order IDs
+console.log('[QUOTES] Calculations:', calculations.map(c => ({ 
+  id: c.id, 
+  name: c.name.substring(0, 30), 
+  orderId: c.orderId,
+  approvalStatus: c.approvalStatus,
+  shareToken: c.shareToken ? 'yes' : 'no'
+})));
+
 // Group calculations by project
 const projectsMap = new Map<string, { project: Project; calculations: typeof calculations }>();
 
@@ -191,6 +200,8 @@ function formatDate(date: Date | null): string {
             const projectApproved = group.calculations.filter(c => c.approvalStatus === 'CLIENT_APPROVED').length;
             const projectTotal = group.calculations.length;
             const allApproved = projectApproved === projectTotal;
+            // Calculate project total from calculations (more accurate than stored value)
+            const projectPriceSum = group.calculations.reduce((sum, c) => sum + (c.totalPrice || 0), 0);
             
             return (
               <details 
@@ -223,7 +234,7 @@ function formatDate(date: Date | null): string {
                   <div class="flex items-center gap-2 md:gap-4 flex-shrink-0">
                     <div class="text-right">
                       <div class="text-base md:text-lg font-bold text-[#f59e0b] whitespace-nowrap">
-                        {group.project.totalPrice?.toLocaleString('sk-SK', { minimumFractionDigits: 0 }) || '0'} €
+                        {projectPriceSum > 0 ? projectPriceSum.toLocaleString('sk-SK', { minimumFractionDigits: 0 }) : '0'} €
                       </div>
                     </div>
                     <svg class="w-4 h-4 md:w-5 md:h-5 text-[#6b7280] transition-transform project-chevron flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -239,10 +250,10 @@ function formatDate(date: Date | null): string {
                       const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
                       const hasShareLink = calc.shareToken && calc.shareExpiresAt && calc.shareExpiresAt > new Date();
                       const hasCommunication = calc.approvalStatus === 'CLIENT_REQUESTED_CHANGES' || calc.approvalStatus === 'WAITING_FOR_CLIENT';
-                      // Link to order quote page if order exists, otherwise to quote page with token
+                      // Link to order quote page if order exists, share token page, or direct calculation page for authenticated clients
                       const quoteUrl = calc.orderId 
                         ? `/order/${calc.orderId}/quote?from=quotes` 
-                        : (hasShareLink ? `/quote/${calc.id}/${calc.shareToken}` : null);
+                        : (hasShareLink ? `/quote/${calc.id}/${calc.shareToken}` : `/calculation/${calc.id}`);
                       
                       return (
                       <a 
@@ -328,7 +339,7 @@ function formatDate(date: Date | null): string {
                     // Link to order quote page if order exists, otherwise to quote page with token
                     const quoteUrl = calc.orderId 
                       ? `/order/${calc.orderId}/quote?from=quotes` 
-                      : (hasShareLink ? `/quote/${calc.id}/${calc.shareToken}` : null);
+                      : (hasShareLink ? `/quote/${calc.id}/${calc.shareToken}` : `/calculation/${calc.id}`);
                     
                     return (
                       <a 

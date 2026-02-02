@@ -407,16 +407,33 @@ export async function canCustomerAccessOrder(customerId: string, customerName: s
 // Check if customer can access a calculation
 export async function canCustomerAccessCalculation(customerId: string, customerName: string, calculationId: string): Promise<boolean> {
   const calculation = await getCalculationById(calculationId);
-  if (!calculation) return false;
+  if (!calculation) {
+    console.log('[canCustomerAccessCalculation] Calculation not found:', calculationId);
+    return false;
+  }
   
   // Check by client entity ID or name match
   const calcClient = calculation.calculationData?.selectedClient;
+  console.log('[canCustomerAccessCalculation] Check:', { 
+    customerId, 
+    customerName, 
+    calcClientEntityId: calcClient?.entityId,
+    calcClientId: calcClient?.id,
+    calcClientName: calcClient?.name || calcClient?.['Názov'],
+    clientEntityId: calculation.clientEntityId
+  });
+  
   if (calcClient) {
     if (calcClient.entityId === customerId || calcClient.id === customerId) return true;
-    const calcClientName = calcClient.name || '';
-    if (calcClientName.toLowerCase().includes(customerName.toLowerCase())) return true;
+    const calcClientName = calcClient.name || calcClient['Názov'] || '';
+    if (calcClientName && customerName && calcClientName.toLowerCase().includes(customerName.toLowerCase())) return true;
+    if (calcClientName && customerName && customerName.toLowerCase().includes(calcClientName.toLowerCase())) return true;
   }
   
+  // Also check by clientEntityId from calculation
+  if (calculation.clientEntityId === customerId) return true;
+  
+  console.log('[canCustomerAccessCalculation] Access DENIED');
   return false;
 }
 
@@ -701,7 +718,8 @@ export async function getCalculationProducts(calculationId: string | null): Prom
     });
     
     let products: any[] = [];
-    let totalPrice: number | null = null;
+    let totalPrice: number | null = null;  // Price WITH commissions (for client)
+    let actualTotalPrice: number | null = null;  // Price without commissions
     let globalPricingBreakdown: any = null;
     
     for (const row of dataResult.rows) {
@@ -709,8 +727,14 @@ export async function getCalculationProducts(calculationId: string | null): Prom
       const rawData = row.json_value || row.string_value;
       const numValue = row.number_value as number | null;
       
-      if (attrName === 'totalPrice' || attrName === 'actualTotalPrice') {
+      // totalPrice includes commissions (referrer markup), actualTotalPrice is base price
+      // For client portal, we want to show totalPrice (with commissions)
+      if (attrName === 'totalPrice') {
         if (numValue != null) totalPrice = numValue;
+        continue;
+      }
+      if (attrName === 'actualTotalPrice') {
+        if (numValue != null) actualTotalPrice = numValue;
         continue;
       }
       
@@ -723,7 +747,7 @@ export async function getCalculationProducts(calculationId: string | null): Prom
       
       if (attrName === 'calculationData') {
         if (parsed?.products) {
-          products = parsed.products;
+        products = parsed.products;
         }
         // Extract global pricing breakdown for multipliers
         if (parsed?.globalPricingBreakdown) {
@@ -747,18 +771,30 @@ export async function getCalculationProducts(calculationId: string | null): Prom
       ? globalFinalPrice / globalOriginalPrice 
       : combinedMultiplier;
     
+    // Calculate product prices - if products don't have individual prices, distribute total
+    // Prefer totalPrice (with commissions) over actualTotalPrice (base price)
+    const finalTotalPrice = totalPrice || actualTotalPrice || 0;
+    const productCount = products.length || 1;
+    const perProductFallbackPrice = finalTotalPrice / productCount;
+    
     // Convert to QuoteProduct format
     const quoteProducts: QuoteProduct[] = products.map((product: any) => {
       const customFields = product.customFieldValues || product.calculatorInputValues || {};
       const dimensions = extractDimensionsFromInputFields(customFields);
       
-      // Get price from product - prioritize adjusted prices, then apply multiplier to base
+      // Get SALE price from product (not cost!) - prioritize adjusted prices, then sale prices
       // 1. Check if product already has global adjusted price
       const adjustedPrice = product.globalAdjustedPrice || product.adjustedPrice || 0;
-      // 2. Get base price
-      const basePrice = product.totalCost || product.finalPrice || product.price || product.salePrice || 0;
-      // 3. Use adjusted price if available, otherwise apply price ratio to base price
-      const productTotalCost = adjustedPrice > 0 ? adjustedPrice : (basePrice * priceRatio);
+      // 2. Get base SALE price (totalSale, originalSalePrice, salePrice - NOT totalCost which is purchase price!)
+      const basePrice = product.totalSale || product.originalSalePrice || product.salePrice || product.finalPrice || product.price || 0;
+      // 3. Use adjusted price if available, otherwise apply price ratio to base sale price
+      // 4. If no sale price available, use per-product fallback from total calculation price
+      let productTotalCost = adjustedPrice > 0 ? adjustedPrice : (basePrice * priceRatio);
+      
+      // Fallback: if productTotalCost is 0 but we have a total price, use that
+      if (productTotalCost === 0 && perProductFallbackPrice > 0) {
+        productTotalCost = perProductFallbackPrice;
+      }
       
       const quantity = product.quantity || product.calculatedQuantity || 1;
       const unit = product.variant?.unit || product.unit || 'ks';
@@ -1011,23 +1047,29 @@ export async function getClientCalculations(
     // BATCH LOAD: Get all attributes in ONE query
     const dataMap = await getBatchEavEntityData(paginatedIds);
     
-    // Get share tokens for calculations (only for visible ones)
+    // Get share tokens for calculations (include responded shares for approved calcs)
     const calcIds = paginatedIds.map(id => dataMap.get(id)?.id).filter(Boolean);
     const shareTokens = new Map<string, { token: string; expiresAt: Date }>();
     
     if (calcIds.length > 0) {
       const placeholders = calcIds.map(() => '?').join(',');
+      // Include both 'active' and 'responded' shares (responded = client approved/rejected)
       const sharesResult = await db.execute({
-        sql: `SELECT calculation_id, token, expires_at 
+        sql: `SELECT calculation_id, token, expires_at, status
               FROM calculation_shares 
-              WHERE status = 'active' AND expires_at > ? AND calculation_id IN (${placeholders})`,
-        args: [Math.floor(Date.now() / 1000), ...calcIds]
+              WHERE (status = 'active' OR status = 'responded') AND calculation_id IN (${placeholders})
+              ORDER BY created_at DESC`,
+        args: [...calcIds]
       });
       for (const row of sharesResult.rows) {
-        shareTokens.set(row.calculation_id as string, {
-          token: row.token as string,
-          expiresAt: new Date((row.expires_at as number) * 1000),
-        });
+        const calcId = row.calculation_id as string;
+        // Only store first (newest) share per calculation
+        if (!shareTokens.has(calcId)) {
+          shareTokens.set(calcId, {
+            token: row.token as string,
+            expiresAt: new Date((row.expires_at as number) * 1000),
+          });
+        }
       }
     }
     
@@ -1215,7 +1257,7 @@ export async function getCalculationById(calculationId: string): Promise<Calcula
         console.error('Error parsing calculationData:', e);
       }
     }
-
+    
     return {
       id: data.id || '',
       entityId: entityId,
@@ -1613,53 +1655,53 @@ export async function updateQuoteResponse(
     
     // Update calculation approval status via EAV (only if status needs to change)
     if (newApprovalStatus) {
-      const entityResult = await db.execute({
-        sql: `SELECT e.id as entityId 
-              FROM entities e 
-              JOIN attributes a ON e.id = a.entity_id 
-              WHERE e.table_id = ? 
-                AND a.attribute_name = 'id' 
-                AND a.string_value = ?
+    const entityResult = await db.execute({
+      sql: `SELECT e.id as entityId 
+            FROM entities e 
+            JOIN attributes a ON e.id = a.entity_id 
+            WHERE e.table_id = ? 
+              AND a.attribute_name = 'id' 
+              AND a.string_value = ?
+            LIMIT 1`,
+      args: [EAV_TABLES.calculations, calculationId]
+    });
+    
+    console.log('[updateQuoteResponse] Entity result:', JSON.stringify(entityResult.rows));
+    
+    if (entityResult.rows.length > 0) {
+      const entityId = entityResult.rows[0].entityId as string;
+      console.log('[updateQuoteResponse] Found entity:', entityId);
+      
+      // Check if approvalStatus attribute exists
+      const existingAttr = await db.execute({
+        sql: `SELECT id FROM attributes 
+              WHERE entity_id = ? AND attribute_name = 'approvalStatus'
               LIMIT 1`,
-        args: [EAV_TABLES.calculations, calculationId]
+        args: [entityId]
       });
       
-      console.log('[updateQuoteResponse] Entity result:', JSON.stringify(entityResult.rows));
+      console.log('[updateQuoteResponse] Existing attr count:', existingAttr.rows.length);
       
-      if (entityResult.rows.length > 0) {
-        const entityId = entityResult.rows[0].entityId as string;
-        console.log('[updateQuoteResponse] Found entity:', entityId);
-        
-        // Check if approvalStatus attribute exists
-        const existingAttr = await db.execute({
-          sql: `SELECT id FROM attributes 
-                WHERE entity_id = ? AND attribute_name = 'approvalStatus'
-                LIMIT 1`,
-          args: [entityId]
+      if (existingAttr.rows.length > 0) {
+        // Update existing attribute
+        await db.execute({
+          sql: `UPDATE attributes SET string_value = ? 
+                WHERE entity_id = ? AND attribute_name = 'approvalStatus'`,
+          args: [newApprovalStatus, entityId]
         });
-        
-        console.log('[updateQuoteResponse] Existing attr count:', existingAttr.rows.length);
-        
-        if (existingAttr.rows.length > 0) {
-          // Update existing attribute
-          await db.execute({
-            sql: `UPDATE attributes SET string_value = ? 
-                  WHERE entity_id = ? AND attribute_name = 'approvalStatus'`,
-            args: [newApprovalStatus, entityId]
-          });
-          console.log('[updateQuoteResponse] Updated existing approvalStatus');
-        } else {
-          // Insert new attribute with all required fields
-          const attrId = crypto.randomUUID();
-          await db.execute({
-            sql: `INSERT INTO attributes (id, entity_id, attribute_name, value_type, string_value, created_at)
-                  VALUES (?, ?, 'approvalStatus', 'string', ?, ?)`,
-            args: [attrId, entityId, newApprovalStatus, Math.floor(Date.now() / 1000)]
-          });
-          console.log('[updateQuoteResponse] Inserted new approvalStatus');
-        }
+        console.log('[updateQuoteResponse] Updated existing approvalStatus');
       } else {
-        console.log('[updateQuoteResponse] No entity found for calculation');
+        // Insert new attribute with all required fields
+        const attrId = crypto.randomUUID();
+        await db.execute({
+          sql: `INSERT INTO attributes (id, entity_id, attribute_name, value_type, string_value, created_at)
+                VALUES (?, ?, 'approvalStatus', 'string', ?, ?)`,
+          args: [attrId, entityId, newApprovalStatus, Math.floor(Date.now() / 1000)]
+        });
+        console.log('[updateQuoteResponse] Inserted new approvalStatus');
+      }
+    } else {
+      console.log('[updateQuoteResponse] No entity found for calculation');
       }
     } else {
       console.log('[updateQuoteResponse] Skipping status update (question only)');
