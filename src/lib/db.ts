@@ -2609,3 +2609,332 @@ export async function getClientNotifications(
     return [];
   }
 }
+
+// ============================================================================
+// SUPPLIER RFQ - Dopyty na dodávateľov
+// ============================================================================
+
+export interface SupplierRfq {
+  id: string;
+  calculationId: string;
+  projectId: string | null;
+  supplierEmail: string;
+  supplierName: string | null;
+  status: 'requested' | 'received' | 'expired';
+  dueDate: string | null;
+  note: string | null;
+  vatRate: number;
+  token: string;
+  expiresAt: string;
+  items: SupplierRfqItem[];
+  autoApply: boolean;
+  createdAt: string;
+  organizationId?: string;
+}
+
+export interface SupplierRfqItem {
+  itemId: string;
+  name: string;
+  spec: string | null;
+  qty: number;
+  unitPrice: number | null;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  ico?: string;
+  vatRate?: number;
+}
+
+// Get supplier RFQ by token
+export async function getSupplierRfqByToken(token: string): Promise<{ rfq: SupplierRfq; organization: Organization | null } | null> {
+  try {
+    const db = getClient();
+    
+    // Find all supplier_requests tables
+    const tablesResult = await db.execute({
+      sql: `SELECT id, organization_id FROM table_definitions WHERE name = 'supplier_requests'`,
+      args: []
+    });
+    
+    for (const tableRow of tablesResult.rows) {
+      const tableId = tableRow.id as string;
+      const organizationId = tableRow.organization_id as string;
+      
+      // Find entities in this table
+      const entitiesResult = await db.execute({
+        sql: `SELECT e.id as entity_id 
+              FROM entities e
+              INNER JOIN attributes a ON a.entity_id = e.id
+              WHERE e.table_id = ? 
+              AND a.attribute_name = 'token' 
+              AND a.string_value = ?`,
+        args: [tableId, token]
+      });
+      
+      if (entitiesResult.rows.length > 0) {
+        const entityId = entitiesResult.rows[0].entity_id as string;
+        
+        // Load all attributes for this entity
+        const attrsResult = await db.execute({
+          sql: `SELECT attribute_name, string_value, number_value, boolean_value, date_value, json_value
+                FROM attributes WHERE entity_id = ?`,
+          args: [entityId]
+        });
+        
+        const rfqData: any = { organizationId };
+        for (const attr of attrsResult.rows) {
+          const name = attr.attribute_name as string;
+          let value: any = attr.string_value ?? attr.number_value ?? attr.boolean_value ?? attr.date_value;
+          
+          // Parse JSON values
+          if (attr.json_value) {
+            try {
+              value = typeof attr.json_value === 'string' ? JSON.parse(attr.json_value) : attr.json_value;
+            } catch {
+              value = attr.json_value;
+            }
+          }
+          
+          rfqData[name] = value;
+        }
+        
+        // Get organization info
+        let organization: Organization | null = null;
+        const orgResult = await db.execute({
+          sql: `SELECT id, name FROM organization WHERE id = ?`,
+          args: [organizationId]
+        });
+        
+        if (orgResult.rows.length > 0) {
+          organization = {
+            id: orgResult.rows[0].id as string,
+            name: orgResult.rows[0].name as string,
+          };
+        }
+        
+        return { rfq: rfqData as SupplierRfq, organization };
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('[getSupplierRfqByToken] Error:', error);
+    return null;
+  }
+}
+
+// Submit supplier quote response
+export async function submitSupplierQuote(
+  token: string,
+  items: Array<{
+    itemId: string;
+    unitPrice: number | null;
+    vatRate: number | null;
+    leadTimeDays: number | null;
+  }>,
+  supplierEmail?: string,
+  supplierName?: string,
+  notes?: string
+): Promise<{ success: boolean; quoteId?: string; error?: string }> {
+  try {
+    const db = getClient();
+    
+    // Find the RFQ by token
+    const rfqResult = await getSupplierRfqByToken(token);
+    if (!rfqResult) {
+      return { success: false, error: 'RFQ not found' };
+    }
+    
+    const { rfq } = rfqResult;
+    
+    // Check expiration
+    if (rfq.expiresAt && new Date(rfq.expiresAt).getTime() < Date.now()) {
+      return { success: false, error: 'Link expired' };
+    }
+    
+    const organizationId = rfq.organizationId;
+    if (!organizationId) {
+      return { success: false, error: 'Organization not found' };
+    }
+    
+    // Find or create supplier_quotes table
+    let quotesTableId: string | null = null;
+    const quotesTableResult = await db.execute({
+      sql: `SELECT id FROM table_definitions WHERE name = 'supplier_quotes' AND organization_id = ?`,
+      args: [organizationId]
+    });
+    
+    if (quotesTableResult.rows.length > 0) {
+      quotesTableId = quotesTableResult.rows[0].id as string;
+    } else {
+      // Create table
+      quotesTableId = crypto.randomUUID();
+      await db.execute({
+        sql: `INSERT INTO table_definitions (id, name, organization_id, description, created_at)
+              VALUES (?, 'supplier_quotes', ?, 'Supplier responses to RFQs', datetime('now'))`,
+        args: [quotesTableId, organizationId]
+      });
+    }
+    
+    // Create entity for quote
+    const quoteId = crypto.randomUUID();
+    const entityId = crypto.randomUUID();
+    
+    await db.execute({
+      sql: `INSERT INTO entities (id, table_id, created_at, updated_at) VALUES (?, ?, datetime('now'), datetime('now'))`,
+      args: [entityId, quotesTableId]
+    });
+    
+    // Insert attributes
+    const quoteData = {
+      id: quoteId,
+      requestId: rfq.id,
+      supplierEmail: supplierEmail || rfq.supplierEmail || null,
+      supplierName: supplierName || rfq.supplierName || null,
+      status: 'received',
+      notes: notes || null,
+      submittedAt: new Date().toISOString(),
+    };
+    
+    for (const [key, value] of Object.entries(quoteData)) {
+      if (value !== null && value !== undefined) {
+        const attrId = crypto.randomUUID();
+        await db.execute({
+          sql: `INSERT INTO attributes (id, entity_id, attribute_name, string_value) VALUES (?, ?, ?, ?)`,
+          args: [attrId, entityId, key, String(value)]
+        });
+      }
+    }
+    
+    // Store items as JSON attribute
+    const itemsAttrId = crypto.randomUUID();
+    await db.execute({
+      sql: `INSERT INTO attributes (id, entity_id, attribute_name, json_value) VALUES (?, ?, 'items', ?)`,
+      args: [itemsAttrId, entityId, JSON.stringify(items)]
+    });
+    
+    // Auto-apply to calculation if enabled
+    if (rfq.autoApply && rfq.calculationId) {
+      try {
+        await applySupplierQuoteToCalculation(rfq.calculationId, organizationId, items, quoteId, supplierEmail, supplierName);
+      } catch (err) {
+        console.error('[submitSupplierQuote] Auto-apply failed:', err);
+      }
+    }
+    
+    return { success: true, quoteId };
+  } catch (error) {
+    console.error('[submitSupplierQuote] Error:', error);
+    return { success: false, error: 'Internal error' };
+  }
+}
+
+// Apply supplier quote prices to calculation
+async function applySupplierQuoteToCalculation(
+  calculationId: string,
+  organizationId: string,
+  items: Array<{ itemId: string; unitPrice: number | null; vatRate: number | null; leadTimeDays: number | null }>,
+  quoteId: string,
+  supplierEmail?: string,
+  supplierName?: string
+): Promise<void> {
+  const db = getClient();
+  
+  // Find calculations table
+  const calcTableResult = await db.execute({
+    sql: `SELECT id FROM table_definitions WHERE name = 'calculations' AND organization_id = ?`,
+    args: [organizationId]
+  });
+  
+  if (calcTableResult.rows.length === 0) return;
+  
+  const calcTableId = calcTableResult.rows[0].id as string;
+  
+  // Find calculation entity
+  const calcEntityResult = await db.execute({
+    sql: `SELECT e.id as entity_id
+          FROM entities e
+          INNER JOIN attributes a ON a.entity_id = e.id
+          WHERE e.table_id = ?
+          AND a.attribute_name = 'id'
+          AND a.string_value = ?`,
+    args: [calcTableId, calculationId]
+  });
+  
+  if (calcEntityResult.rows.length === 0) return;
+  
+  const entityId = calcEntityResult.rows[0].entity_id as string;
+  
+  // Get calculationData attribute
+  const calcDataResult = await db.execute({
+    sql: `SELECT id, json_value FROM attributes WHERE entity_id = ? AND attribute_name = 'calculationData'`,
+    args: [entityId]
+  });
+  
+  if (calcDataResult.rows.length === 0) return;
+  
+  let calculationData: any = {};
+  try {
+    const raw = calcDataResult.rows[0].json_value;
+    calculationData = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    return;
+  }
+  
+  // Apply prices to products/materials/services
+  const applyToCollection = (collectionName: 'products' | 'materials' | 'services') => {
+    const collection = Array.isArray(calculationData[collectionName]) ? calculationData[collectionName] : [];
+    calculationData[collectionName] = collection.map((item: any) => {
+      const match = items.find(qi => qi.itemId === item.id || qi.itemId === item.product?.id);
+      if (!match) return item;
+      
+      return {
+        ...item,
+        variant: item.variant ? {
+          ...item.variant,
+          purchaseBasePrice: match.unitPrice ?? item.variant.purchaseBasePrice ?? null,
+        } : item.variant,
+        purchase: {
+          ...(item.purchase || {}),
+          type: 'supplier',
+          status: 'selected',
+          selectedQuoteId: quoteId,
+          cost: {
+            unitPrice: match.unitPrice ?? null,
+            currency: 'EUR',
+            vatRate: match.vatRate ?? 20,
+          },
+          leadTimeDays: match.leadTimeDays ?? null,
+          supplierInfo: {
+            name: supplierName || null,
+            email: supplierEmail || null,
+          },
+        },
+      };
+    });
+  };
+  
+  applyToCollection('products');
+  applyToCollection('materials');
+  applyToCollection('services');
+  
+  // Update calculationData attribute
+  const attrId = calcDataResult.rows[0].id as string;
+  await db.execute({
+    sql: `UPDATE attributes SET json_value = ? WHERE id = ?`,
+    args: [JSON.stringify(calculationData), attrId]
+  });
+  
+  // Update updatedAt
+  await db.execute({
+    sql: `UPDATE attributes SET string_value = ? WHERE entity_id = ? AND attribute_name = 'updatedAt'`,
+    args: [new Date().toISOString(), entityId]
+  });
+  
+  console.log('[applySupplierQuoteToCalculation] Applied supplier prices to calculation:', calculationId);
+}

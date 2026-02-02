@@ -1,0 +1,294 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getSupplierRfqByToken } from '../../lib/db';
+
+const { token } = Astro.params;
+
+if (!token) {
+  return Astro.redirect('/not-found');
+}
+
+// Fetch RFQ by token
+const result = await getSupplierRfqByToken(token);
+
+if (!result) {
+  return Astro.redirect('/not-found');
+}
+
+const { rfq, organization } = result;
+
+// Check if expired
+const isExpired = rfq.expiresAt && new Date(rfq.expiresAt) < new Date();
+
+// Check if already submitted
+const isSubmitted = Astro.url.searchParams.get('submitted') === '1';
+
+// Get VAT rate from RFQ
+const defaultVatRate = rfq.vatRate ?? 20;
+
+// Parse items
+const items = Array.isArray(rfq.items) ? rfq.items : [];
+
+// Format currency
+function formatCurrency(n: number): string {
+  return new Intl.NumberFormat('sk-SK', { style: 'currency', currency: 'EUR' }).format(n || 0);
+}
+---
+
+<Layout title="Dopyt na nacenenie">
+  <main class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div class="max-w-3xl mx-auto px-5 py-10">
+      
+      {/* Header */}
+      <div class="text-center mb-8">
+        {organization && (
+          <div class="text-sm text-slate-400 mb-2">{organization.name}</div>
+        )}
+        <h1 class="text-3xl font-bold text-white mb-2">Dopyt na nacenenie</h1>
+        {!isSubmitted && !isExpired && (
+          <p class="text-slate-400">
+            Prosím, vyplňte ceny a termín dodania pre položky nižšie.
+          </p>
+        )}
+      </div>
+
+      {/* Expired State */}
+      {isExpired && (
+        <div class="glass rounded-3xl p-8 text-center mb-6 animate-fade-in-up">
+          <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-white mb-2">Dopyt expiroval</h3>
+          <p class="text-slate-400">Tento dopyt už nie je platný. Kontaktujte zadávateľa pre aktuálny dopyt.</p>
+        </div>
+      )}
+
+      {/* Success State */}
+      {isSubmitted && (
+        <div class="glass rounded-3xl p-8 text-center mb-6 animate-fade-in-up">
+          <div class="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-white mb-2">Ďakujeme!</h3>
+          <p class="text-slate-400">Vaša ponuka bola úspešne odoslaná. Budeme vás kontaktovať.</p>
+        </div>
+      )}
+
+      {/* RFQ Form */}
+      {!isExpired && !isSubmitted && (
+        <form 
+          id="rfqForm"
+          class="space-y-6"
+          action={`/api/supplier-rfq/${token}/respond`}
+          method="POST"
+        >
+          {/* Items */}
+          <div class="space-y-4">
+            {items.map((item: any, idx: number) => (
+              <div class="glass rounded-2xl p-6 animate-fade-in-up" style={`animation-delay: ${idx * 0.1}s`}>
+                <div class="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 class="font-semibold text-white text-lg">{item.name || `Položka ${idx + 1}`}</h3>
+                    {item.spec && (
+                      <p class="text-slate-400 text-sm mt-1">{item.spec}</p>
+                    )}
+                    <div class="text-slate-400 text-sm mt-2">
+                      Požadované množstvo: <strong class="text-white">{item.qty || 1} ks</strong>
+                    </div>
+                  </div>
+                  <div id={`total-display-${idx}`} class="text-right hidden">
+                    <div class="text-xs text-slate-500">Celková cena</div>
+                    <div class="font-semibold text-lg text-emerald-400">
+                      <span id={`total-value-${idx}`}>0.00</span> €
+                    </div>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {/* Unit Price */}
+                  <div>
+                    <label class="block text-sm text-slate-400 mb-1">Jedn. cena (€)</label>
+                    <input
+                      type="number"
+                      name={`items[${idx}][unitPrice]`}
+                      step="0.0001"
+                      required
+                      data-idx={idx}
+                      data-qty={item.qty || 1}
+                      class="unit-price-input w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      placeholder="Cena za 1 ks"
+                    />
+                    <div class="text-xs text-slate-500 mt-1">za 1 kus</div>
+                  </div>
+
+                  {/* Total Price */}
+                  <div>
+                    <label class="block text-sm text-slate-400 mb-1">Celkom (€)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      data-idx={idx}
+                      data-qty={item.qty || 1}
+                      class="total-price-input w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Celková cena"
+                    />
+                    <div class="text-xs text-slate-500 mt-1">za {item.qty || 1} ks</div>
+                  </div>
+
+                  {/* VAT */}
+                  <div>
+                    <label class="block text-sm text-slate-400 mb-1">DPH (%)</label>
+                    <input
+                      type="number"
+                      name={`items[${idx}][vatRate]`}
+                      step="1"
+                      value={defaultVatRate}
+                      class="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white"
+                    />
+                  </div>
+
+                  {/* Lead Time */}
+                  <div>
+                    <label class="block text-sm text-slate-400 mb-1">Dodanie (dni)</label>
+                    <input
+                      type="number"
+                      name={`items[${idx}][leadTimeDays]`}
+                      step="1"
+                      placeholder="napr. 7"
+                      class="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Tip */}
+                <div class="mt-4 text-xs text-slate-500 bg-slate-800/30 rounded-lg p-3">
+                  💡 Tip: Zadajte cenu za 1 ks alebo celkovú cenu - druhé pole sa automaticky prepočíta.
+                </div>
+
+                {/* Hidden fields */}
+                <input type="hidden" name={`items[${idx}][itemId]`} value={item.itemId || item.id || ''} />
+                <input type="hidden" name={`items[${idx}][qty]`} value={item.qty || 1} />
+              </div>
+            ))}
+          </div>
+
+          {/* Supplier Info */}
+          <div class="glass rounded-2xl p-6 animate-fade-in-up">
+            <h3 class="font-semibold text-white mb-4">Vaše kontaktné údaje</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm text-slate-400 mb-1">Vaše meno / firma</label>
+                <input
+                  type="text"
+                  name="supplierName"
+                  class="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500"
+                  placeholder="Názov firmy alebo meno"
+                />
+              </div>
+              <div>
+                <label class="block text-sm text-slate-400 mb-1">Váš e-mail</label>
+                <input
+                  type="email"
+                  name="supplierEmail"
+                  class="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500"
+                  placeholder="vas@email.sk"
+                />
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <label class="block text-sm text-slate-400 mb-1">Poznámka (voliteľné)</label>
+              <textarea
+                name="notes"
+                rows="3"
+                class="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500"
+                placeholder="Akékoľvek dodatočné informácie k ponuke..."
+              ></textarea>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            class="w-full py-5 rounded-2xl text-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-200 flex items-center justify-center gap-3"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+            Odoslať ponuku
+          </button>
+        </form>
+      )}
+
+      {/* Company Footer */}
+      {organization && (
+        <div class="mt-12 text-center text-sm text-slate-500">
+          <div class="font-medium text-slate-400">{organization.name}</div>
+          {organization.address && <div>{organization.address}</div>}
+          <div class="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-1">
+            {organization.ico && <span>IČO: {organization.ico}</span>}
+            {organization.email && <span>{organization.email}</span>}
+            {organization.phone && <span>{organization.phone}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  </main>
+</Layout>
+
+<script>
+  // Price calculation - sync unit price and total price
+  document.querySelectorAll('.unit-price-input').forEach((input) => {
+    input.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      const idx = target.dataset.idx;
+      const qty = parseFloat(target.dataset.qty || '1');
+      const unitPrice = parseFloat(target.value.replace(',', '.')) || 0;
+      
+      if (unitPrice >= 0 && qty > 0) {
+        const total = unitPrice * qty;
+        const totalInput = document.querySelector(`.total-price-input[data-idx="${idx}"]`) as HTMLInputElement;
+        if (totalInput) {
+          totalInput.value = total.toFixed(2);
+        }
+        
+        // Update display
+        const displayEl = document.getElementById(`total-display-${idx}`);
+        const valueEl = document.getElementById(`total-value-${idx}`);
+        if (displayEl && valueEl && total > 0) {
+          displayEl.classList.remove('hidden');
+          valueEl.textContent = total.toFixed(2);
+        }
+      }
+    });
+  });
+
+  document.querySelectorAll('.total-price-input').forEach((input) => {
+    input.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      const idx = target.dataset.idx;
+      const qty = parseFloat(target.dataset.qty || '1');
+      const totalPrice = parseFloat(target.value.replace(',', '.')) || 0;
+      
+      if (totalPrice >= 0 && qty > 0) {
+        const unitPrice = totalPrice / qty;
+        const unitInput = document.querySelector(`.unit-price-input[data-idx="${idx}"]`) as HTMLInputElement;
+        if (unitInput) {
+          unitInput.value = unitPrice.toFixed(4);
+        }
+        
+        // Update display
+        const displayEl = document.getElementById(`total-display-${idx}`);
+        const valueEl = document.getElementById(`total-value-${idx}`);
+        if (displayEl && valueEl && totalPrice > 0) {
+          displayEl.classList.remove('hidden');
+          valueEl.textContent = totalPrice.toFixed(2);
+        }
+      }
+    });
+  });
+</script>
