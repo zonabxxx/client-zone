@@ -25,21 +25,61 @@ export const GET: APIRoute = async ({ params }) => {
     // Extract data
     const products = calculationData.products || [];
     const services = calculationData.services || [];
+    const materials = calculationData.materials || [];
     const client = calculationData.selectedClient || {};
 
-    // Calculate totals
-    const productTotal = products.reduce((sum: number, p: any) => {
-      const price = Number(p.totalSalePrice) || Number(p.salePrice) || Number(p.variant?.salePrice) || 0;
-      return sum + price;
-    }, 0);
+    // Get global pricing multipliers (client rating + delivery term) - same as main quote page
+    const globalPricing = calculationData.globalPricingBreakdown || {};
+    const clientMultiplier = Number(globalPricing.clientMultiplier) || 1;
+    const deliveryMultiplier = Number(globalPricing.deliveryMultiplier) || 1;
+    const combinedMultiplier = clientMultiplier * deliveryMultiplier;
 
+    // Get the final total amount (with all markups including referrer commission)
+    const totalAmount = Number(calculation.totalPrice) || Number(calculationData.actualTotalPrice) || 0;
+
+    // Compute base product total - same logic as main quote page
+    const computeBaseProductTotal = (p: any): number => {
+      const salePrice = Number(p?.totalSale) || Number(p?.originalSalePrice) || 0;
+      if (salePrice > 0) return salePrice * combinedMultiplier;
+      const productPrice = Number(p?.finalPrice) || Number(p?.price) || 0;
+      if (productPrice > 0) return productPrice * combinedMultiplier;
+      const qty = Number(p?.quantity) || 1;
+      const unitPrice = Number(p?.variant?.unitSalePrice) || Number(p?.unitPrice) || 0;
+      if (unitPrice > 0) return unitPrice * qty * combinedMultiplier;
+      const basePrice = Number(p?.variant?.basePrice) || 0;
+      return basePrice * combinedMultiplier;
+    };
+
+    // Calculate base totals
+    const baseProductTotal = products.reduce((sum: number, p: any) => sum + computeBaseProductTotal(p), 0);
     const serviceTotal = services.reduce((sum: number, s: any) => {
-      const price = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || 0;
-      return sum + price;
+      const salePrice = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
+      return sum + salePrice * combinedMultiplier;
     }, 0);
+    const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalCost) || 0) * combinedMultiplier, 0);
+    const baseTotal = baseProductTotal + serviceTotal + materialTotal;
 
-    const subtotal = productTotal + serviceTotal;
-    const globalTotal = calculationData.globalPricingBreakdown?.finalPrice || subtotal;
+    // Calculate markup ratio (includes referrer commission)
+    const markupRatio = (totalAmount > 0 && baseTotal > 0) ? totalAmount / baseTotal : 1;
+
+    // Final product total function - applies proportional markup
+    const computeProductTotal = (p: any): number => {
+      const basePrice = computeBaseProductTotal(p);
+      return basePrice * markupRatio;
+    };
+
+    // Final service total function - applies proportional markup
+    const computeServiceTotal = (s: any): number => {
+      const salePrice = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
+      const basePrice = salePrice * combinedMultiplier;
+      return basePrice * markupRatio;
+    };
+
+    const productTotal = products.reduce((sum: number, p: any) => sum + computeProductTotal(p), 0);
+    const serviceTotalFinal = services.reduce((sum: number, s: any) => sum + computeServiceTotal(s), 0);
+
+    // Use the actual total amount from calculation (which includes all markups)
+    const globalTotal = totalAmount > 0 ? totalAmount : (productTotal + serviceTotalFinal);
     const vatAmount = globalTotal * (vatRate / 100);
     const totalWithVat = globalTotal + vatAmount;
 
@@ -47,11 +87,11 @@ export const GET: APIRoute = async ({ params }) => {
     const formatCurrency = (n: number) => 
       new Intl.NumberFormat('sk-SK', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
-    // Generate products HTML
+    // Generate products HTML with correct prices
     const productsHtml = products.map((p: any, idx: number) => {
       const name = p.name || p.variant?.name || p.product?.name || "Produkt";
       const qty = Number(p.quantity) || 1;
-      const price = Number(p.totalSalePrice) || Number(p.salePrice) || Number(p.variant?.salePrice) || 0;
+      const price = computeProductTotal(p); // Use the computed price with multipliers
       const specs = p.templateConfigLabels || {};
       const specsHtml = Object.entries(specs)
         .filter(([k, v]) => v && !['id', 'entityId'].includes(k))
@@ -71,15 +111,15 @@ export const GET: APIRoute = async ({ params }) => {
       `;
     }).join("");
 
-    // Generate services HTML (only non-zero)
+    // Generate services HTML with correct prices (only non-zero)
     const servicesHtml = services
       .filter((s: any) => {
-        const price = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || 0;
+        const price = computeServiceTotal(s);
         return price > 0;
       })
       .map((s: any, idx: number) => {
         const name = s.service?.name || s.name || s.serviceName || "Služba";
-        const price = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || 0;
+        const price = computeServiceTotal(s); // Use the computed price with multipliers
         return `
           <tr style="background:${idx % 2 === 0 ? '#fff' : '#fafaf9'}">
             <td style="padding:10px 12px;border:1px solid #e5e5e5;"><strong>${name}</strong></td>
