@@ -2803,12 +2803,17 @@ export async function submitSupplierQuote(
     
     // Create entity for quote
     const quoteId = crypto.randomUUID();
-    const entityId = crypto.randomUUID();
+    const entityUUID = crypto.randomUUID();
+    const now = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
+    
+    console.log('[submitSupplierQuote] Creating entity:', entityUUID, 'for quote:', quoteId);
     
     await db.execute({
-      sql: `INSERT INTO entities (id, table_id, created_at, updated_at) VALUES (?, ?, datetime('now'), datetime('now'))`,
-      args: [entityId, quotesTableId]
+      sql: `INSERT INTO entities (id, table_id, entity_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      args: [entityUUID, quotesTableId, quoteId, now, now]
     });
+    
+    console.log('[submitSupplierQuote] Entity created successfully');
     
     // Insert attributes
     const quoteData = {
@@ -2821,12 +2826,14 @@ export async function submitSupplierQuote(
       submittedAt: new Date().toISOString(),
     };
     
+    console.log('[submitSupplierQuote] Inserting attributes...');
+    
     for (const [key, value] of Object.entries(quoteData)) {
       if (value !== null && value !== undefined) {
         const attrId = crypto.randomUUID();
         await db.execute({
-          sql: `INSERT INTO attributes (id, entity_id, attribute_name, string_value) VALUES (?, ?, ?, ?)`,
-          args: [attrId, entityId, key, String(value)]
+          sql: `INSERT INTO attributes (id, entity_id, attribute_name, value_type, string_value, created_at) VALUES (?, ?, ?, 'string', ?, ?)`,
+          args: [attrId, entityUUID, key, String(value), now]
         });
       }
     }
@@ -2834,9 +2841,11 @@ export async function submitSupplierQuote(
     // Store items as JSON attribute
     const itemsAttrId = crypto.randomUUID();
     await db.execute({
-      sql: `INSERT INTO attributes (id, entity_id, attribute_name, json_value) VALUES (?, ?, 'items', ?)`,
-      args: [itemsAttrId, entityId, JSON.stringify(items)]
+      sql: `INSERT INTO attributes (id, entity_id, attribute_name, value_type, json_value, created_at) VALUES (?, ?, 'items', 'json', ?, ?)`,
+      args: [itemsAttrId, entityUUID, JSON.stringify(items), now]
     });
+    
+    console.log('[submitSupplierQuote] All attributes inserted successfully');
     
     // Auto-apply to calculation if enabled
     if (rfq.autoApply && rfq.calculationId) {
