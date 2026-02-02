@@ -2652,6 +2652,8 @@ export interface Organization {
 
 // Get supplier RFQ by token
 export async function getSupplierRfqByToken(token: string): Promise<{ rfq: SupplierRfq; organization: Organization | null } | null> {
+  console.log('[getSupplierRfqByToken] Looking for token:', token);
+  
   try {
     const db = getClient();
     
@@ -2661,9 +2663,12 @@ export async function getSupplierRfqByToken(token: string): Promise<{ rfq: Suppl
       args: []
     });
     
+    console.log('[getSupplierRfqByToken] Found', tablesResult.rows.length, 'supplier_requests tables');
+    
     for (const tableRow of tablesResult.rows) {
       const tableId = tableRow.id as string;
       const organizationId = tableRow.organization_id as string;
+      console.log('[getSupplierRfqByToken] Checking table:', tableId, 'org:', organizationId);
       
       // Find entities in this table
       const entitiesResult = await db.execute({
@@ -2675,6 +2680,8 @@ export async function getSupplierRfqByToken(token: string): Promise<{ rfq: Suppl
               AND a.string_value = ?`,
         args: [tableId, token]
       });
+      
+      console.log('[getSupplierRfqByToken] Found', entitiesResult.rows.length, 'entities with this token');
       
       if (entitiesResult.rows.length > 0) {
         const entityId = entitiesResult.rows[0].entity_id as string;
@@ -2741,26 +2748,39 @@ export async function submitSupplierQuote(
   supplierName?: string,
   notes?: string
 ): Promise<{ success: boolean; quoteId?: string; error?: string }> {
+  console.log('[submitSupplierQuote] Starting with token:', token);
+  console.log('[submitSupplierQuote] Items count:', items.length);
+  
   try {
     const db = getClient();
+    console.log('[submitSupplierQuote] DB client obtained');
     
     // Find the RFQ by token
+    console.log('[submitSupplierQuote] Looking up RFQ by token...');
     const rfqResult = await getSupplierRfqByToken(token);
+    console.log('[submitSupplierQuote] RFQ result:', rfqResult ? 'found' : 'not found');
+    
     if (!rfqResult) {
+      console.log('[submitSupplierQuote] RFQ not found for token:', token);
       return { success: false, error: 'RFQ not found' };
     }
     
     const { rfq } = rfqResult;
+    console.log('[submitSupplierQuote] RFQ ID:', rfq.id, 'orgId:', rfq.organizationId);
     
     // Check expiration
     if (rfq.expiresAt && new Date(rfq.expiresAt).getTime() < Date.now()) {
+      console.log('[submitSupplierQuote] RFQ expired at:', rfq.expiresAt);
       return { success: false, error: 'Link expired' };
     }
     
     const organizationId = rfq.organizationId;
     if (!organizationId) {
+      console.log('[submitSupplierQuote] No organization ID in RFQ');
       return { success: false, error: 'Organization not found' };
     }
+    
+    console.log('[submitSupplierQuote] Organization ID:', organizationId);
     
     // Find or create supplier_quotes table
     let quotesTableId: string | null = null;

@@ -23,6 +23,9 @@ const isExpired = rfq.expiresAt && new Date(rfq.expiresAt) < new Date();
 // Check if already submitted
 const isSubmitted = Astro.url.searchParams.get('submitted') === '1';
 
+// Check for error
+const errorParam = Astro.url.searchParams.get('error');
+
 // Get VAT rate from RFQ
 const defaultVatRate = rfq.vatRate ?? 20;
 
@@ -62,6 +65,25 @@ function formatCurrency(n: number): string {
           </div>
           <h3 class="text-xl font-bold text-white mb-2">Dopyt expiroval</h3>
           <p class="text-slate-400">Tento dopyt už nie je platný. Kontaktujte zadávateľa pre aktuálny dopyt.</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {errorParam && !isSubmitted && (
+        <div class="glass rounded-3xl p-8 text-center mb-6 animate-fade-in-up border border-red-500/30">
+          <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-white mb-2">Chyba pri odosielaní</h3>
+          <p class="text-slate-400 mb-4">
+            {errorParam === 'RFQ not found' ? 'Dopyt nebol nájdený.' : 
+             errorParam === 'Link expired' ? 'Platnosť odkazu vypršala.' :
+             errorParam === 'Organization not found' ? 'Organizácia nebola nájdená.' :
+             `Nastala chyba: ${errorParam}`}
+          </p>
+          <p class="text-sm text-slate-500">Skúste to znova alebo kontaktujte zadávateľa.</p>
         </div>
       )}
 

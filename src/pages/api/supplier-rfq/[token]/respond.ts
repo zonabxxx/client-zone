@@ -2,10 +2,12 @@ import type { APIRoute } from 'astro';
 import { submitSupplierQuote } from '../../../../lib/db';
 
 export const POST: APIRoute = async ({ params, request }) => {
+  const token = params.token;
+  console.log('[supplier-rfq respond] Token:', token);
+  
   try {
-    const token = params.token;
-    
     if (!token) {
+      console.log('[supplier-rfq respond] No token provided');
       return new Response(JSON.stringify({ error: 'Token required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -14,6 +16,8 @@ export const POST: APIRoute = async ({ params, request }) => {
 
     // Parse form data or JSON
     const contentType = request.headers.get('content-type') || '';
+    console.log('[supplier-rfq respond] Content-Type:', contentType);
+    
     let items: Array<{
       itemId: string;
       unitPrice: number | null;
@@ -59,7 +63,11 @@ export const POST: APIRoute = async ({ params, request }) => {
       }));
     }
 
+    console.log('[supplier-rfq respond] Items parsed:', items.length);
+    console.log('[supplier-rfq respond] Items:', JSON.stringify(items));
+
     if (items.length === 0) {
+      console.log('[supplier-rfq respond] No items');
       return new Response(JSON.stringify({ error: 'No items submitted' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -67,6 +75,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
 
     // Submit the quote
+    console.log('[supplier-rfq respond] Submitting quote...');
     const result = await submitSupplierQuote(
       token,
       items,
@@ -74,13 +83,17 @@ export const POST: APIRoute = async ({ params, request }) => {
       supplierName,
       notes
     );
+    console.log('[supplier-rfq respond] Result:', JSON.stringify(result));
 
     if (!result.success) {
+      console.log('[supplier-rfq respond] Failed:', result.error);
       // If form submission, redirect with error
       if (!contentType.includes('application/json')) {
+        const errorUrl = `/supplier-rfq/${token}?error=${encodeURIComponent(result.error || 'unknown')}`;
+        console.log('[supplier-rfq respond] Redirecting to:', errorUrl);
         return new Response(null, {
-          status: 302,
-          headers: { 'Location': `/supplier-rfq/${token}?error=1` }
+          status: 303,
+          headers: { 'Location': errorUrl }
         });
       }
       
@@ -92,9 +105,11 @@ export const POST: APIRoute = async ({ params, request }) => {
 
     // Success - redirect for form or return JSON
     if (!contentType.includes('application/json')) {
+      const successUrl = `/supplier-rfq/${token}?submitted=1`;
+      console.log('[supplier-rfq respond] Success! Redirecting to:', successUrl);
       return new Response(null, {
         status: 303,
-        headers: { 'Location': `/supplier-rfq/${token}?submitted=1` }
+        headers: { 'Location': successUrl }
       });
     }
 
@@ -106,7 +121,15 @@ export const POST: APIRoute = async ({ params, request }) => {
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
-    console.error('[supplier-rfq respond] Error:', error);
+    console.error('[supplier-rfq respond] Exception:', error);
+    
+    // For form submissions, redirect with error
+    if (token) {
+      return new Response(null, {
+        status: 303,
+        headers: { 'Location': `/supplier-rfq/${token}?error=exception` }
+      });
+    }
     
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
