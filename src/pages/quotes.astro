@@ -250,10 +250,10 @@ function formatDate(date: Date | null): string {
                       const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
                       const hasShareLink = calc.shareToken && calc.shareExpiresAt && calc.shareExpiresAt > new Date();
                       const hasCommunication = calc.approvalStatus === 'CLIENT_REQUESTED_CHANGES' || calc.approvalStatus === 'WAITING_FOR_CLIENT';
-                      // Link to order quote page if order exists, share token page, or direct calculation page for authenticated clients
-                      const quoteUrl = calc.orderId 
-                        ? `/order/${calc.orderId}/quote?from=quotes` 
-                        : (hasShareLink ? `/quote/${calc.id}/${calc.shareToken}` : `/calculation/${calc.id}`);
+                      // Prefer share link (has correct language/VAT), fallback to order quote page, then calculation page
+                      const quoteUrl = hasShareLink 
+                        ? `/quote/${calc.id}/${calc.shareToken}` 
+                        : (calc.orderId ? `/order/${calc.orderId}/quote?from=quotes` : `/calculation/${calc.id}`);
                       
                       return (
                       <a 
@@ -336,10 +336,10 @@ function formatDate(date: Date | null): string {
                     const isApproved = calc.approvalStatus === 'CLIENT_APPROVED';
                     const hasShareLink = calc.shareToken && calc.shareExpiresAt && calc.shareExpiresAt > new Date();
                     const hasCommunication = calc.approvalStatus === 'CLIENT_REQUESTED_CHANGES' || calc.approvalStatus === 'WAITING_FOR_CLIENT';
-                    // Link to order quote page if order exists, otherwise to quote page with token
-                    const quoteUrl = calc.orderId 
-                      ? `/order/${calc.orderId}/quote?from=quotes` 
-                      : (hasShareLink ? `/quote/${calc.id}/${calc.shareToken}` : `/calculation/${calc.id}`);
+                    // Prefer share link (has correct language/VAT), fallback to order quote page, then calculation page
+                    const quoteUrl = hasShareLink 
+                      ? `/quote/${calc.id}/${calc.shareToken}` 
+                      : (calc.orderId ? `/order/${calc.orderId}/quote?from=quotes` : `/calculation/${calc.id}`);
                     
                     return (
                       <a 

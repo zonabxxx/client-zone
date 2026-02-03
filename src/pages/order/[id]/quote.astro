@@ -63,6 +63,11 @@ if (products.length === 0) {
 // Get calculation share link if exists
 const shareLink = await getCalculationShareLink(order.calculationId);
 
+// If share link exists, redirect to the public quote page (has correct language, VAT, materials)
+if (shareLink?.shareToken && shareLink?.calculationId) {
+  return Astro.redirect(`/quote/${shareLink.calculationId}/${shareLink.shareToken}`);
+}
+
 // Get actual approval status from calculation (not from order status)
 const calculation = order.calculationId ? await getCalculationById(order.calculationId) : null;
 const approvalStatus = calculation?.approvalStatus || 'DRAFT';
