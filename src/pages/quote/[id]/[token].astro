@@ -629,8 +629,19 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                 </h4>
                 <div class="space-y-2">
                   {products.map((p: any, idx: number) => {
-                    const specs = p.templateConfigLabels || {};
+                    // Try multiple sources for specs: templateConfigLabels, variant.templateConfigLabels, variant.description parts
+                    const specs = p.templateConfigLabels 
+                      || p.variant?.templateConfigLabels 
+                      || p.templateConfig 
+                      || p.variant?.templateConfig
+                      || {};
                     const hasSpecs = Object.keys(specs).length > 0;
+                    
+                    // Build specs string from variant description if no templateConfigLabels
+                    const variantDesc = p.variant?.description || p.variant?.variantDescription || '';
+                    const descParts = variantDesc ? variantDesc.split(' · ').filter((s: string) => s.trim()) : [];
+                    const hasDescParts = !hasSpecs && descParts.length > 0;
+                    
                     const description = getProductDescription(p);
                     
                     return (
@@ -643,51 +654,37 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                           <span class="font-semibold text-white">{formatCurrency(computeProductTotal(p))}</span>
                         </div>
                         
-                        {/* Product Specifications */}
+                        {/* Product Specifications - show all available specs */}
                         {hasSpecs && (
                           <div class="mt-2 pt-2 border-t border-slate-700/50">
                             <div class="flex flex-wrap gap-2 text-xs">
-                              {specs.format && (
+                              {Object.entries(specs)
+                                .filter(([key, value]) => value && key !== 'id' && key !== 'entityId' && key !== 'undefined')
+                                .map(([key, value]) => (
+                                  <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
+                                    {value}
+                                  </span>
+                                ))
+                              }
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Fallback to variant description parts (e.g. "1510 × 2240 mm · 1 ks · 20 mm") */}
+                        {hasDescParts && (
+                          <div class="mt-2 pt-2 border-t border-slate-700/50">
+                            <div class="flex flex-wrap gap-2 text-xs">
+                              {descParts.map((part: string) => (
                                 <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
-                                  📐 {specs.format}
+                                  {part}
                                 </span>
-                              )}
-                              {specs.papier && (
-                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
-                                  📄 {specs.papier}
-                                </span>
-                              )}
-                              {specs.gramaz && (
-                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
-                                  ⚖️ {specs.gramaz}
-                                </span>
-                              )}
-                              {specs.tlac && (
-                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
-                                  🖨️ {specs.tlac}
-                                </span>
-                              )}
-                              {specs.lamino && (
-                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
-                                  ✨ {specs.lamino}
-                                </span>
-                              )}
-                              {specs.sklad && specs.sklad !== 'Bez skladu' && (
-                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
-                                  📁 {specs.sklad}
-                                </span>
-                              )}
-                              {specs.dokoncenie && (
-                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
-                                  ✂️ {specs.dokoncenie}
-                                </span>
-                              )}
+                              ))}
                             </div>
                           </div>
                         )}
                         
                         {/* Fallback to description if no specs */}
-                        {!hasSpecs && description && (
+                        {!hasSpecs && !hasDescParts && description && (
                           <p class="mt-2 text-xs text-slate-500">{description}</p>
                         )}
                       </div>
