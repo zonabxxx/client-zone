@@ -587,6 +587,22 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                   </div>
                 </>
               )}
+              
+              {materials.length > 0 && (
+                <>
+                  <div class="w-px h-10 bg-slate-700"></div>
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
+                      <svg class="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                    </span>
+                    <div class="text-left">
+                      <div class="font-semibold text-white">{materials.length} {isGerman ? (materials.length === 1 ? 'Material' : 'Materialien') : (materials.length === 1 ? 'materiál' : 'materiály')}</div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             
             <div class="flex items-center gap-2 text-emerald-400">
@@ -701,6 +717,36 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                       <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
                         <span class="text-slate-300 font-medium">{getServiceName(s) || (isGerman ? 'Dienstleistung' : 'Služba')}</span>
                         <span class="font-semibold text-white">{formatCurrency(salePrice)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
+            {/* Materials */}
+            {materials.length > 0 && (
+              <div class="p-5 border-b border-slate-700/50">
+                <h4 class="font-semibold text-white mb-3 flex items-center gap-2">
+                  <span class="w-6 h-6 bg-orange-500/20 rounded-md flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </span>
+                  {isGerman ? 'Materialien' : 'Materiály'}
+                </h4>
+                <div class="space-y-2">
+                  {materials.map((m: any, idx: number) => {
+                    const materialPrice = Number(m.totalCost) || (Number(m.salePrice || 0) * Number(m.quantity || 1)) || 0;
+                    const quantity = Number(m.quantity) || 1;
+                    const unit = m.unit || 'ks';
+                    return (
+                      <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
+                        <span class="text-slate-300 font-medium">
+                          {getMaterialName(m) || (isGerman ? 'Material' : 'Materiál')}
+                          <span class="text-slate-500 font-normal ml-2">× {quantity} {unit}</span>
+                        </span>
+                        <span class="font-semibold text-white">{formatCurrency(materialPrice * combinedMultiplier)}</span>
                       </div>
                     );
                   })}
