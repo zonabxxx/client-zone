@@ -1400,6 +1400,21 @@ export interface PublicQuoteData {
     dic: string | null;
     icDph: string | null;
     vatRate: number | null;
+    invoicing?: {
+      companyName?: string;
+      street?: string;
+      city?: string;
+      postalCode?: string;
+      country?: string;
+      ico?: string;
+      dic?: string;
+      icDph?: string;
+      email?: string;
+      phone?: string;
+      vatRate?: number;
+      bankIban?: string;
+      bankSwift?: string;
+    };
   } | null;
 }
 
@@ -1533,7 +1548,7 @@ export async function getCalculationByShareToken(
       
       if (orgResult.rows.length > 0) {
         const orgRow = orgResult.rows[0];
-        // Parse metadata for additional org info
+        // Parse metadata for additional org info (invoicing data is stored here)
         let metadata: any = {};
         if (orgRow.metadata) {
           try {
@@ -1541,15 +1556,20 @@ export async function getCalculationByShareToken(
           } catch { /* ignore */ }
         }
         
+        // Invoicing data is in metadata.invoicing
+        const invoicing = metadata.invoicing || {};
+        
         organization = {
           name: orgRow.name as string,
-          email: metadata.email || null,
-          phone: metadata.phone || null,
+          email: metadata.email || invoicing.email || null,
+          phone: metadata.phone || invoicing.phone || null,
           address: metadata.address || null,
-          ico: metadata.ico || null,
-          dic: metadata.dic || null,
-          icDph: metadata.icDph || metadata.ic_dph || null,
-          vatRate: metadata.vatRate || metadata.vat_rate || 23,
+          ico: metadata.ico || invoicing.ico || null,
+          dic: metadata.dic || invoicing.dic || null,
+          icDph: metadata.icDph || metadata.ic_dph || invoicing.icDph || null,
+          vatRate: metadata.vatRate || metadata.vat_rate || invoicing.vatRate || 23,
+          // Add full invoicing object for PDF generation
+          invoicing: invoicing,
         };
       }
     }
