@@ -1,9 +1,95 @@
 import type { APIRoute } from 'astro';
 import { getCalculationByShareToken } from '../../../../../lib/db';
+import { translateBatch } from '../../../../../lib/translate';
 import puppeteer from 'puppeteer';
 
-export const GET: APIRoute = async ({ params }) => {
+// Translations for PDF
+const PDF_TRANSLATIONS = {
+  sk: {
+    docTitle: "CENOVÁ PONUKA",
+    supplier: "DODÁVATEĽ",
+    customer: "ODBERATEĽ",
+    products: "Produkty",
+    product: "Produkt",
+    services: "Služby",
+    service: "Služba",
+    materials: "Materiály",
+    material: "Materiál",
+    quantity: "Množstvo",
+    price: "Cena",
+    conditions: "Podmienky",
+    deliveryTime: "Dodacia lehota",
+    workingDays: "pracovných dní",
+    offerValidity: "Platnosť ponuky",
+    days: "dní",
+    priceSummary: "Cenové zhrnutie",
+    subtotal: "Medzisúčet (bez DPH)",
+    vat: "DPH",
+    reverseCharge: "Reverse Charge - DPH",
+    totalWithVat: "CELKOM S DPH",
+    totalNet: "CELKOM",
+    footer: "Ďakujeme za Váš záujem. V prípade otázok nás neváhajte kontaktovať.",
+  },
+  en: {
+    docTitle: "QUOTATION",
+    supplier: "SUPPLIER",
+    customer: "CUSTOMER",
+    products: "Products",
+    product: "Product",
+    services: "Services",
+    service: "Service",
+    materials: "Materials",
+    material: "Material",
+    quantity: "Quantity",
+    price: "Price",
+    conditions: "Terms & Conditions",
+    deliveryTime: "Delivery time",
+    workingDays: "working days",
+    offerValidity: "Offer validity",
+    days: "days",
+    priceSummary: "Price Summary",
+    subtotal: "Subtotal (excl. VAT)",
+    vat: "VAT",
+    reverseCharge: "Reverse Charge - VAT",
+    totalWithVat: "TOTAL INCL. VAT",
+    totalNet: "TOTAL NET",
+    footer: "Thank you for your interest. Please do not hesitate to contact us if you have any questions.",
+  },
+  "de-AT": {
+    docTitle: "ANGEBOT",
+    supplier: "LIEFERANT",
+    customer: "KUNDE",
+    products: "Produkte",
+    product: "Produkt",
+    services: "Dienstleistungen",
+    service: "Dienstleistung",
+    materials: "Materialien",
+    material: "Material",
+    quantity: "Menge",
+    price: "Preis",
+    conditions: "Bedingungen",
+    deliveryTime: "Lieferzeit",
+    workingDays: "Werktage",
+    offerValidity: "Angebotsgültigkeit",
+    days: "Tage",
+    priceSummary: "Preisübersicht",
+    subtotal: "Zwischensumme (netto)",
+    vat: "MwSt.",
+    reverseCharge: "Reverse Charge - MwSt.",
+    totalWithVat: "GESAMT INKL. MWST.",
+    totalNet: "GESAMT NETTO",
+    footer: "Vielen Dank für Ihr Interesse. Bei Fragen stehen wir Ihnen gerne zur Verfügung.",
+  },
+};
+
+type PDFLanguage = keyof typeof PDF_TRANSLATIONS;
+
+export const GET: APIRoute = async ({ params, url }) => {
   const { id, token } = params;
+  const lang = (url.searchParams.get('lang') || 'sk') as PDFLanguage;
+  const t = PDF_TRANSLATIONS[lang] || PDF_TRANSLATIONS.sk;
+  const isGerman = lang === 'de-AT';
+  const isForeign = lang !== 'sk';
 
   if (!id || !token) {
     return new Response(JSON.stringify({ error: 'Missing id or token' }), { status: 400 });
@@ -80,16 +166,60 @@ export const GET: APIRoute = async ({ params }) => {
 
     // Use the actual total amount from calculation (which includes all markups)
     const globalTotal = totalAmount > 0 ? totalAmount : (productTotal + serviceTotalFinal);
-    const vatAmount = globalTotal * (vatRate / 100);
+    
+    // For foreign clients, VAT = 0 (Reverse Charge)
+    const effectiveVatRate = isForeign ? 0 : vatRate;
+    const vatAmount = globalTotal * (effectiveVatRate / 100);
     const totalWithVat = globalTotal + vatAmount;
 
     // Format currency
     const formatCurrency = (n: number) => 
-      new Intl.NumberFormat('sk-SK', { style: 'currency', currency: 'EUR' }).format(n || 0);
+      new Intl.NumberFormat(lang === 'de-AT' ? 'de-AT' : 'sk-SK', { style: 'currency', currency: 'EUR' }).format(n || 0);
+
+    // Translate product/service/material names if not Slovak
+    const translationMap = new Map<string, string>();
+    if (isForeign) {
+      const textsToTranslate: string[] = [];
+      
+      products.forEach((p: any) => {
+        const name = p.name || p.variant?.name || p.product?.name || "";
+        if (name) textsToTranslate.push(name);
+      });
+      
+      services.forEach((s: any) => {
+        const name = s.service?.name || s.name || s.serviceName || "";
+        if (name) textsToTranslate.push(name);
+      });
+      
+      materials.forEach((m: any) => {
+        const name = m.material?.name || m.name || m.materialName || "";
+        if (name) textsToTranslate.push(name);
+      });
+      
+      const uniqueTexts = [...new Set(textsToTranslate.filter(t => t.trim()))];
+      
+      if (uniqueTexts.length > 0) {
+        try {
+          const translated = await translateBatch(uniqueTexts, lang, 'sk');
+          uniqueTexts.forEach((original, i) => {
+            translationMap.set(original, translated[i]);
+          });
+        } catch (e) {
+          console.error('Translation failed:', e);
+        }
+      }
+    }
+    
+    // Helper to translate text
+    const tr = (text: string): string => {
+      if (!isForeign || !text) return text;
+      return translationMap.get(text) || text;
+    };
 
     // Generate products HTML with correct prices
     const productsHtml = products.map((p: any, idx: number) => {
-      const name = p.name || p.variant?.name || p.product?.name || "Produkt";
+      const rawName = p.name || p.variant?.name || p.product?.name || t.product;
+      const name = tr(rawName);
       const qty = Number(p.quantity) || 1;
       const price = computeProductTotal(p); // Use the computed price with multipliers
       const specs = p.templateConfigLabels || {};
@@ -118,7 +248,8 @@ export const GET: APIRoute = async ({ params }) => {
         return price > 0;
       })
       .map((s: any, idx: number) => {
-        const name = s.service?.name || s.name || s.serviceName || "Služba";
+        const rawName = s.service?.name || s.name || s.serviceName || t.service;
+        const name = tr(rawName);
         const price = computeServiceTotal(s); // Use the computed price with multipliers
         return `
           <tr style="background:${idx % 2 === 0 ? '#fff' : '#fafaf9'}">
@@ -149,12 +280,13 @@ export const GET: APIRoute = async ({ params }) => {
     const deliveryDays = calculationData.overallDeliveryDays || 10;
 
     // Generate HTML
+    const dateLocale = lang === 'de-AT' ? 'de-AT' : lang === 'en' ? 'en-GB' : 'sk-SK';
     const html = `
 <!DOCTYPE html>
-<html lang="sk">
+<html lang="${lang}">
 <head>
     <meta charset="UTF-8">
-    <title>Cenová ponuka - ${calculation.name}</title>
+    <title>${t.docTitle} - ${calculation.name}</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; }
@@ -186,9 +318,9 @@ export const GET: APIRoute = async ({ params }) => {
                 <div style="font-size:22px;font-weight:700;color:#f59e0b;">${orgName}</div>
             </td>
             <td style="width:50%;vertical-align:middle;text-align:right;">
-                <div class="doc-title">CENOVÁ PONUKA</div>
+                <div class="doc-title">${t.docTitle}</div>
                 <div class="doc-badge">${calculation.name}</div>
-                <div style="font-size:11px;color:#78716c;margin-top:6px;">${new Date().toLocaleDateString('sk-SK')}</div>
+                <div style="font-size:11px;color:#78716c;margin-top:6px;">${new Date().toLocaleDateString(dateLocale)}</div>
             </td>
         </tr>
     </table>
@@ -198,7 +330,7 @@ export const GET: APIRoute = async ({ params }) => {
     <table style="width:100%;border-collapse:separate;border-spacing:12px 0;margin-bottom:14px;">
         <tr>
             <td class="info-card" style="width:48%;">
-                <div class="card-label">DODÁVATEĽ</div>
+                <div class="card-label">${t.supplier}</div>
                 <div class="card-title">${orgName}</div>
                 <div class="card-text">
                     ${orgAddress}<br>
@@ -208,7 +340,7 @@ export const GET: APIRoute = async ({ params }) => {
                 </div>
             </td>
             <td class="info-card" style="width:48%;">
-                <div class="card-label">ODBERATEĽ</div>
+                <div class="card-label">${t.customer}</div>
                 <div class="card-title">${clientName}</div>
                 <div class="card-text">
                     ${clientAddress}<br>
@@ -221,36 +353,36 @@ export const GET: APIRoute = async ({ params }) => {
     </table>
 
     ${products.length > 0 ? `
-    <div class="section-title">Produkty</div>
+    <div class="section-title">${t.products}</div>
     <table class="table">
-        <thead><tr><th>Produkt</th><th style="text-align:center;">Množstvo</th><th style="text-align:right;">Cena</th></tr></thead>
+        <thead><tr><th>${t.product}</th><th style="text-align:center;">${t.quantity}</th><th style="text-align:right;">${t.price}</th></tr></thead>
         <tbody>${productsHtml}</tbody>
     </table>
     ` : ''}
 
     ${servicesHtml ? `
-    <div class="section-title">Služby</div>
+    <div class="section-title">${t.services}</div>
     <table class="table">
-        <thead><tr><th>Služba</th><th style="text-align:right;">Cena</th></tr></thead>
+        <thead><tr><th>${t.service}</th><th style="text-align:right;">${t.price}</th></tr></thead>
         <tbody>${servicesHtml}</tbody>
     </table>
     ` : ''}
 
-    <div class="section-title">Podmienky</div>
+    <div class="section-title">${t.conditions}</div>
     <table class="table">
-        <tr><td style="width:50%;padding:10px 12px;border:1px solid #e5e5e5;">Dodacia lehota</td><td style="padding:10px 12px;border:1px solid #e5e5e5;"><strong>${deliveryDays} pracovných dní</strong></td></tr>
-        <tr style="background:#fafaf9;"><td style="padding:10px 12px;border:1px solid #e5e5e5;">Platnosť ponuky</td><td style="padding:10px 12px;border:1px solid #e5e5e5;"><strong>14 dní</strong></td></tr>
+        <tr><td style="width:50%;padding:10px 12px;border:1px solid #e5e5e5;">${t.deliveryTime}</td><td style="padding:10px 12px;border:1px solid #e5e5e5;"><strong>${deliveryDays} ${t.workingDays}</strong></td></tr>
+        <tr style="background:#fafaf9;"><td style="padding:10px 12px;border:1px solid #e5e5e5;">${t.offerValidity}</td><td style="padding:10px 12px;border:1px solid #e5e5e5;"><strong>14 ${t.days}</strong></td></tr>
     </table>
 
-    <div class="section-title">Cenové zhrnutie</div>
+    <div class="section-title">${t.priceSummary}</div>
     <table class="summary-table">
-        <tr><td class="label">Medzisúčet (bez DPH)</td><td class="value">${formatCurrency(globalTotal)}</td></tr>
-        <tr><td class="label">DPH ${vatRate}%</td><td class="value">${formatCurrency(vatAmount)}</td></tr>
-        <tr class="total-row"><td>CELKOM S DPH</td><td class="value">${formatCurrency(totalWithVat)}</td></tr>
+        <tr><td class="label">${t.subtotal}</td><td class="value">${formatCurrency(globalTotal)}</td></tr>
+        <tr><td class="label">${isForeign ? t.reverseCharge : t.vat} ${effectiveVatRate}%</td><td class="value">${formatCurrency(vatAmount)}</td></tr>
+        <tr class="total-row"><td>${isForeign ? t.totalNet : t.totalWithVat}</td><td class="value">${formatCurrency(totalWithVat)}</td></tr>
     </table>
 
     <div class="footer">
-        Ďakujeme za Váš záujem. V prípade otázok nás neváhajte kontaktovať.
+        ${t.footer}
     </div>
 </body>
 </html>
@@ -274,9 +406,10 @@ export const GET: APIRoute = async ({ params }) => {
     await browser.close();
 
     // Return PDF
-    const filename = `cenova-ponuka-${calculation.name?.replace(/[^a-zA-Z0-9]/g, '-') || id}.pdf`;
+    const filePrefix = lang === 'de-AT' ? 'angebot' : lang === 'en' ? 'quotation' : 'cenova-ponuka';
+    const filename = `${filePrefix}-${calculation.name?.replace(/[^a-zA-Z0-9]/g, '-') || id}.pdf`;
     
-    return new Response(pdfBuffer, {
+    return new Response(Buffer.from(pdfBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
