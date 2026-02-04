@@ -370,7 +370,7 @@ const serviceTotal = services.reduce((sum: number, s: any) => {
   const salePrice = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
   return sum + salePrice * combinedMultiplier;
 }, 0);
-const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalCost) || 0) * combinedMultiplier, 0);
+const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalSale) || Number(m.totalCost) || 0) * combinedMultiplier, 0);
 const baseTotal = baseProductTotal + serviceTotal + materialTotal;
 
 // Calculate markup ratio (includes referrer commission)
@@ -633,7 +633,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                 </h4>
                 <div class="space-y-2">
                   {materials.map((m: any, idx: number) => {
-                    const materialPrice = Number(m.totalCost) || (Number(m.salePrice || 0) * Number(m.quantity || 1)) || 0;
+                    const materialPrice = Number(m.totalSale) || Number(m.totalCost) || (Number(m.salePrice || 0) * Number(m.quantity || 1)) || 0;
                     const quantity = Number(m.quantity) || 1;
                     const unit = m.unit || 'ks';
                     return (

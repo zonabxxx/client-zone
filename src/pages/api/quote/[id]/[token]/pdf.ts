@@ -178,7 +178,7 @@ export const GET: APIRoute = async ({ params, url }) => {
       const salePrice = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
       return sum + salePrice * combinedMultiplier;
     }, 0);
-    const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalCost) || 0) * combinedMultiplier, 0);
+    const materialTotal = materials.reduce((sum: number, m: any) => sum + (Number(m.totalSale) || Number(m.totalCost) || 0) * combinedMultiplier, 0);
     const baseTotal = baseProductTotal + serviceTotal + materialTotal;
 
     // Calculate markup ratio (includes referrer commission)
@@ -421,7 +421,8 @@ export const GET: APIRoute = async ({ params, url }) => {
           const name = tr(rawName);
           const qty = Number(m.quantity) || 1;
           const unit = m.unit || 'ks';
-          const price = (Number(m.totalCost) || (Number(m.salePrice || 0) * qty) || 0) * combinedMultiplier * markupRatio;
+          // Use totalSale first (main field), then fallbacks
+          const price = (Number(m.totalSale) || Number(m.totalCost) || (Number(m.salePrice || 0) * qty) || 0) * combinedMultiplier * markupRatio;
           return `
             <tr style="background:${idx % 2 === 0 ? '#fff' : '#fafaf9'}">
               <td style="padding:10px 12px;border:1px solid #e5e5e5;"><strong>${name}</strong></td>
