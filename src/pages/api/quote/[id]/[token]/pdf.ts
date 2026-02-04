@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getCalculationByShareToken } from '../../../../../lib/db';
+import { getCalculationByShareToken, getCustomerById } from '../../../../../lib/db';
 import { translateBatch } from '../../../../../lib/translate';
 import puppeteer from 'puppeteer';
 import * as fs from 'fs';
@@ -131,11 +131,24 @@ export const GET: APIRoute = async ({ params, url }) => {
     const products = calculationData.products || [];
     const services = calculationData.services || [];
     const materials = calculationData.materials || [];
-    const client = calculationData.selectedClient || {};
-
-    // Debug: log client data to see what fields are available
-    console.log('📋 [PDF] Client data keys:', Object.keys(client));
-    console.log('📋 [PDF] Client data sample:', JSON.stringify(client).substring(0, 500));
+    
+    // Load client from database for complete data (including address)
+    const clientFromCalc = calculationData.selectedClient || {};
+    const clientEntityId = clientFromCalc.entityId || clientFromCalc.id || calculation.clientEntityId;
+    
+    let client: any = clientFromCalc;
+    if (clientEntityId) {
+      const dbClient = await getCustomerById(clientEntityId);
+      if (dbClient) {
+        console.log('📋 [PDF] Loaded client from DB:', dbClient.name, 'Address:', dbClient.billingStreet, dbClient.billingCity);
+        client = { ...clientFromCalc, ...dbClient };
+      } else {
+        console.log('📋 [PDF] Client not found in DB, using calculation data');
+      }
+    }
+    
+    // Debug: log client data
+    console.log('📋 [PDF] Final client data:', JSON.stringify(client).substring(0, 500));
 
     // Get global pricing multipliers (client rating + delivery term) - same as main quote page
     const globalPricing = calculationData.globalPricingBreakdown || {};

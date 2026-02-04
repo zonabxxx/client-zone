@@ -2987,3 +2987,53 @@ async function applySupplierQuoteToCalculation(
   
   console.log('[applySupplierQuoteToCalculation] Applied supplier prices to calculation:', calculationId);
 }
+
+// Get full customer data by ID (for PDF generation)
+export async function getCustomerById(customerId: string): Promise<any | null> {
+  try {
+    const db = getClient();
+    const result = await db.execute({
+      sql: `
+        SELECT 
+          id,
+          entity_id as entityId,
+          name,
+          business_name as businessName,
+          ico,
+          dic,
+          ic_dph as icDph,
+          email,
+          phone,
+          billing_street as billingStreet,
+          billing_postal_code as billingPostalCode,
+          billing_city as billingCity,
+          billing_country as billingCountry,
+          billing_country_code as billingCountryCode,
+          corr_street as corrStreet,
+          corr_postal_code as corrPostalCode,
+          corr_city as corrCity,
+          corr_country as corrCountry,
+          delivery_street as deliveryStreet,
+          delivery_postal_code as deliveryPostalCode,
+          delivery_city as deliveryCity,
+          delivery_country as deliveryCountry,
+          contact_first_name as contactFirstName,
+          contact_last_name as contactLastName,
+          contact_email as contactEmail,
+          contact_phone1 as contactPhone1,
+          contact_phone2 as contactPhone2
+        FROM customers 
+        WHERE id = ? OR entity_id = ?
+        LIMIT 1
+      `,
+      args: [customerId, customerId]
+    });
+    
+    if (result.rows.length === 0) return null;
+    
+    return result.rows[0];
+  } catch (error) {
+    console.error('[getCustomerById] Error:', error);
+    return null;
+  }
+}
