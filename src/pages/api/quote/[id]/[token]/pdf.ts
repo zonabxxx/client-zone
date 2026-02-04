@@ -48,6 +48,20 @@ const PDF_TRANSLATIONS = {
     totalWithVat: "CELKOM S DPH",
     totalNet: "CELKOM",
     footer: "Ďakujeme za Váš záujem. V prípade otázok nás neváhajte kontaktovať.",
+    // New translations
+    items: "Položky",
+    name: "Názov",
+    count: "Počet",
+    unit: "MJ",
+    unitPrice: "J.cena",
+    total: "Celkom",
+    vatBase: "Základ DPH",
+    vatAmount: "Výška DPH",
+    totalToPay: "Suma na úhradu",
+    date: "Dátum",
+    validity: "Platnosť",
+    deliveryAddress: "Dodacia adresa",
+    pcs: "ks",
   },
   en: {
     docTitle: "QUOTATION",
@@ -73,6 +87,20 @@ const PDF_TRANSLATIONS = {
     totalWithVat: "TOTAL INCL. VAT",
     totalNet: "TOTAL NET",
     footer: "Thank you for your interest. Please do not hesitate to contact us if you have any questions.",
+    // New translations
+    items: "Items",
+    name: "Name",
+    count: "Qty",
+    unit: "Unit",
+    unitPrice: "Unit Price",
+    total: "Total",
+    vatBase: "VAT Base",
+    vatAmount: "VAT Amount",
+    totalToPay: "Total to Pay",
+    date: "Date",
+    validity: "Validity",
+    deliveryAddress: "Delivery Address",
+    pcs: "pcs",
   },
   "de-AT": {
     docTitle: "ANGEBOT",
@@ -98,6 +126,20 @@ const PDF_TRANSLATIONS = {
     totalWithVat: "GESAMT INKL. MWST.",
     totalNet: "GESAMT NETTO",
     footer: "Vielen Dank für Ihr Interesse. Bei Fragen stehen wir Ihnen gerne zur Verfügung.",
+    // New translations
+    items: "Positionen",
+    name: "Bezeichnung",
+    count: "Menge",
+    unit: "Einheit",
+    unitPrice: "Einzelpreis",
+    total: "Gesamt",
+    vatBase: "Nettobetrag",
+    vatAmount: "MwSt. Betrag",
+    totalToPay: "Zahlbetrag",
+    date: "Datum",
+    validity: "Gültigkeit",
+    deliveryAddress: "Lieferadresse",
+    pcs: "Stk.",
   },
 };
 
@@ -212,10 +254,15 @@ export const GET: APIRoute = async ({ params, url }) => {
     const formatCurrency = (n: number) => 
       new Intl.NumberFormat(lang === 'de-AT' ? 'de-AT' : 'sk-SK', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
-    // Translate product/service/material names if not Slovak
+    // Translate product/service/material names AND calculation name if not Slovak
     const translationMap = new Map<string, string>();
     if (isForeign) {
       const textsToTranslate: string[] = [];
+      
+      // Add calculation name for translation
+      if (calculation.name) {
+        textsToTranslate.push(calculation.name);
+      }
       
       products.forEach((p: any) => {
         const name = p.name || p.variant?.name || p.product?.name || "";
@@ -336,136 +383,335 @@ export const GET: APIRoute = async ({ params, url }) => {
     // Load logo
     const logoBase64 = await getLogoBase64();
 
-    // Generate HTML
+    // Generate HTML - Invoice-style layout
     const dateLocale = lang === 'de-AT' ? 'de-AT' : lang === 'en' ? 'en-GB' : 'sk-SK';
+    const currentDate = new Date().toLocaleDateString(dateLocale);
+    
+    // Calculate per-item details for invoice-style display
+    const allItems: Array<{name: string; description: string; qty: number; unit: string; unitPrice: number; total: number; vatRate: number; vatAmount: number; totalWithVat: number}> = [];
+    
+    // Add products
+    products.forEach((p: any) => {
+      const rawName = p.name || p.variant?.name || p.product?.name || t.product;
+      const name = tr(rawName);
+      const qty = Number(p.quantity) || 1;
+      const total = computeProductTotal(p);
+      const unitPrice = qty > 0 ? total / qty : total;
+      const specs = p.templateConfigLabels || {};
+      const description = Object.entries(specs)
+        .filter(([k, v]) => v && !['id', 'entityId'].includes(k))
+        .slice(0, 4)
+        .map(([k, v]) => v)
+        .join(', ');
+      
+      allItems.push({
+        name,
+        description,
+        qty,
+        unit: t.pcs,
+        unitPrice,
+        total,
+        vatRate: effectiveVatRate,
+        vatAmount: total * (effectiveVatRate / 100),
+        totalWithVat: total * (1 + effectiveVatRate / 100)
+      });
+    });
+    
+    // Add services
+    services.filter((s: any) => computeServiceTotal(s) > 0).forEach((s: any) => {
+      const rawName = s.service?.name || s.name || s.serviceName || t.service;
+      const name = tr(rawName);
+      const total = computeServiceTotal(s);
+      
+      allItems.push({
+        name,
+        description: '',
+        qty: 1,
+        unit: t.pcs,
+        unitPrice: total,
+        total,
+        vatRate: effectiveVatRate,
+        vatAmount: total * (effectiveVatRate / 100),
+        totalWithVat: total * (1 + effectiveVatRate / 100)
+      });
+    });
+    
+    // Add materials
+    materials.forEach((m: any) => {
+      const rawName = m.material?.name || m.name || m.materialName || t.material;
+      const name = tr(rawName);
+      const qty = Number(m.quantity) || 1;
+      const unit = m.unit === 'ks' ? t.pcs : (m.unit || t.pcs);
+      const total = (Number(m.totalSale) || Number(m.totalCost) || (Number(m.salePrice || 0) * qty) || 0) * combinedMultiplier * markupRatio;
+      const unitPrice = qty > 0 ? total / qty : total;
+      
+      allItems.push({
+        name,
+        description: '',
+        qty,
+        unit,
+        unitPrice,
+        total,
+        vatRate: effectiveVatRate,
+        vatAmount: total * (effectiveVatRate / 100),
+        totalWithVat: total * (1 + effectiveVatRate / 100)
+      });
+    });
+
+    // Calculate validity date (14 days from now)
+    const validityDate = new Date();
+    validityDate.setDate(validityDate.getDate() + 14);
+    const validityDateStr = validityDate.toLocaleDateString(dateLocale);
+
     const html = `
 <!DOCTYPE html>
 <html lang="${lang}">
 <head>
     <meta charset="UTF-8">
     <title>${t.docTitle} - ${calculation.name}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        * { box-sizing: border-box; }
-        body { font-family: 'Outfit', system-ui, sans-serif; font-size: 12px; line-height: 1.5; color: #1a1a1a; margin: 0; padding: 24px; background: #fff; }
-        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-        .doc-title { font-size: 26px; font-weight: 800; color: #f59e0b; }
-        .doc-badge { font-size: 13px; font-weight: 600; color: #92400e; padding: 6px 14px; background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 6px; display: inline-block; border: 1px solid #fcd34d; }
-        .gradient-line { height: 4px; background: linear-gradient(90deg, #f59e0b, #fbbf24, #fcd34d); margin-bottom: 18px; border-radius: 2px; }
-        .info-card { background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 1px solid #fcd34d; border-radius: 8px; padding: 12px 14px; vertical-align: top; }
-        .card-label { font-size: 9px; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 2px solid #f59e0b; }
-        .card-title { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; }
-        .card-text { font-size: 10px; color: #57534e; line-height: 1.5; }
-        .section-title { font-size: 12px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 3px solid #f59e0b; }
-        .table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 14px; }
-        .table th { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 10px 12px; text-align: left; font-weight: 700; font-size: 10px; text-transform: uppercase; }
-        .summary-table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-        .summary-table td { padding: 10px 14px; border: 1px solid #e5e5e5; }
-        .summary-table .label { background: #fafaf9; font-weight: 500; width: 60%; color: #57534e; }
-        .summary-table .value { text-align: right; font-weight: 700; }
-        .summary-table .total-row { background: linear-gradient(135deg, #f59e0b, #d97706) !important; color: white; }
-        .summary-table .total-row td { border-color: #d97706; font-size: 15px; font-weight: 800; }
-        .footer { margin-top: 24px; padding-top: 14px; border-top: 2px solid #fcd34d; font-size: 10px; color: #78716c; text-align: center; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 10px; line-height: 1.4; color: #333; background: #fff; }
+        .page { padding: 30px 40px; }
+        
+        /* Header row */
+        .header-row { display: table; width: 100%; margin-bottom: 15px; }
+        .header-left { display: table-cell; width: 50%; vertical-align: top; }
+        .header-right { display: table-cell; width: 50%; vertical-align: top; }
+        
+        /* Supplier box */
+        .supplier-box { border: 1px solid #e5e5e5; padding: 12px 15px; margin-right: 10px; }
+        .box-label { font-size: 9px; font-weight: 600; color: #d4740c; text-transform: uppercase; margin-bottom: 8px; }
+        .company-name { font-size: 13px; font-weight: 700; color: #1a365d; margin-bottom: 6px; }
+        .company-details { font-size: 9px; color: #4a5568; line-height: 1.6; }
+        
+        /* Document title box */
+        .doc-box { text-align: right; padding: 0 0 0 10px; }
+        .doc-title { font-size: 10px; color: #d4740c; margin-bottom: 3px; }
+        .doc-number { font-size: 22px; font-weight: 700; color: #d4740c; margin-bottom: 8px; }
+        
+        /* Customer row */
+        .customer-row { display: table; width: 100%; margin-bottom: 15px; }
+        .customer-box { display: table-cell; width: 50%; vertical-align: top; border: 1px solid #e5e5e5; padding: 12px 15px; }
+        .customer-box:first-child { border-right: none; }
+        .customer-name { font-size: 12px; font-weight: 600; color: #1a365d; margin-bottom: 4px; }
+        .customer-details { font-size: 9px; color: #4a5568; line-height: 1.6; }
+        
+        /* Dates box */
+        .dates-box { border: 1px solid #e5e5e5; padding: 10px 15px; margin-bottom: 15px; background: #fafafa; }
+        .dates-row { display: table; width: 100%; }
+        .date-item { display: table-cell; width: 25%; }
+        .date-label { font-size: 8px; color: #d4740c; font-weight: 600; margin-bottom: 2px; }
+        .date-value { font-size: 10px; font-weight: 500; color: #1a365d; }
+        
+        /* Items section */
+        .section-title { font-size: 10px; font-weight: 600; color: #d4740c; text-transform: uppercase; letter-spacing: 0.5px; margin: 15px 0 8px; padding-bottom: 5px; border-bottom: 2px solid #d4740c; }
+        
+        /* Items table */
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .items-table th { background: #d4740c; color: #fff; font-size: 8px; font-weight: 600; text-transform: uppercase; padding: 8px 6px; text-align: left; }
+        .items-table th.r { text-align: right; }
+        .items-table th.c { text-align: center; }
+        .items-table td { padding: 8px 6px; border-bottom: 1px solid #e5e5e5; font-size: 9px; vertical-align: top; color: #1a365d; }
+        .items-table td.r { text-align: right; }
+        .items-table td.c { text-align: center; }
+        .item-name { font-weight: 500; color: #1a365d; font-size: 10px; }
+        .item-desc { font-size: 8px; color: #4a5568; margin-top: 3px; line-height: 1.4; }
+        
+        /* Summary section */
+        .summary-row { display: table; width: 100%; margin-bottom: 15px; }
+        .summary-left { display: table-cell; width: 50%; vertical-align: top; }
+        .summary-right { display: table-cell; width: 50%; vertical-align: top; }
+        
+        /* VAT table */
+        .vat-table { border: 1px solid #e5e5e5; margin-left: auto; width: 100%; }
+        .vat-header { display: table; width: 100%; background: #f7f7f7; border-bottom: 1px solid #e5e5e5; }
+        .vat-header-cell { display: table-cell; padding: 8px 10px; font-size: 8px; font-weight: 600; color: #666; text-transform: uppercase; }
+        .vat-row { display: table; width: 100%; }
+        .vat-cell { display: table-cell; padding: 8px 10px; font-size: 10px; color: #1a365d; }
+        .vat-total-row { display: table; width: 100%; background: #d4740c; color: #fff; }
+        .vat-total-label { display: table-cell; padding: 12px 15px; font-size: 11px; font-weight: 600; width: 60%; }
+        .vat-total-value { display: table-cell; padding: 12px 15px; font-size: 18px; font-weight: 700; text-align: right; color: #fff; }
+        
+        /* Conditions */
+        .conditions-box { border: 1px solid #e5e5e5; padding: 12px 15px; margin-bottom: 15px; background: #fafafa; }
+        .conditions-title { font-size: 9px; font-weight: 600; color: #d4740c; text-transform: uppercase; margin-bottom: 8px; }
+        .conditions-item { display: table; width: 100%; margin-bottom: 4px; }
+        .conditions-label { display: table-cell; width: 40%; font-size: 9px; color: #666; }
+        .conditions-value { display: table-cell; font-size: 9px; font-weight: 600; color: #1a365d; }
+        
+        /* Footer bar */
+        .footer-bar { margin-top: 20px; background: #d4740c; padding: 12px 15px; display: table; width: 100%; }
+        .footer-bar-item { display: table-cell; color: #fff; }
+        .footer-bar-label { font-size: 8px; font-weight: 400; opacity: 0.9; margin-bottom: 2px; }
+        .footer-bar-value { font-size: 10px; font-weight: 600; }
+        
+        /* Footer */
+        .footer { margin-top: 15px; padding-top: 12px; border-top: 1px solid #e5e5e5; }
+        .footer-center { text-align: center; font-size: 8px; color: #666; }
     </style>
 </head>
 <body>
-    <table class="header-table">
-        <tr>
-            <td style="width:50%;vertical-align:middle;">
+<div class="page">
+    <!-- Header -->
+    <div class="header-row">
+        <div class="header-left">
+            <div class="supplier-box">
+                <div class="box-label">${t.supplier}</div>
                 ${logoBase64 
-                  ? `<img src="${logoBase64}" alt="${orgName}" style="max-height:60px;max-width:200px;" />`
-                  : `<div style="font-size:22px;font-weight:700;color:#f59e0b;">${orgName}</div>`
+                  ? `<img src="${logoBase64}" alt="${orgName}" style="max-height:40px;max-width:150px;margin-bottom:6px;" />`
+                  : `<div class="company-name">${orgName}</div>`
                 }
-            </td>
-            <td style="width:50%;vertical-align:middle;text-align:right;">
-                <div class="doc-title">${t.docTitle}</div>
-                <div class="doc-badge">${calculation.name}</div>
-                <div style="font-size:11px;color:#78716c;margin-top:6px;">${new Date().toLocaleDateString(dateLocale)}</div>
-            </td>
-        </tr>
-    </table>
-
-    <div class="gradient-line"></div>
-
-    <table style="width:100%;border-collapse:separate;border-spacing:12px 0;margin-bottom:14px;">
-        <tr>
-            <td class="info-card" style="width:48%;">
-                <div class="card-label">${t.supplier}</div>
-                <div class="card-title">${orgName}</div>
-                <div class="card-text">
+                ${logoBase64 ? `<div class="company-name">${orgName}</div>` : ''}
+                <div class="company-details">
                     ${orgAddress}<br>
                     IČO: ${invoicing.ico || ""} · DIČ: ${invoicing.dic || ""}<br>
                     IČ DPH: ${invoicing.icDph || ""}<br>
                     ${invoicing.email || ""} · ${invoicing.phone || ""}
                 </div>
-            </td>
-            <td class="info-card" style="width:48%;">
-                <div class="card-label">${t.customer}</div>
-                <div class="card-title">${clientName}</div>
-                <div class="card-text">
-                    ${clientAddress}<br>
-                    IČO: ${clientIco} · DIČ: ${clientDic}<br>
-                    IČ DPH: ${clientIcDph}<br>
-                    ${clientEmail} · ${clientPhone}
-                </div>
-            </td>
-        </tr>
-    </table>
-
-    ${materials.length > 0 ? `
-    <div class="section-title">${t.materials}</div>
-    <table class="table">
-        <thead><tr><th>${t.material}</th><th style="text-align:center;">${t.quantity}</th><th style="text-align:right;">${t.price}</th></tr></thead>
-        <tbody>${materials.map((m: any, idx: number) => {
-          const rawName = m.material?.name || m.name || m.materialName || t.material;
-          const name = tr(rawName);
-          const qty = Number(m.quantity) || 1;
-          const unit = m.unit || 'ks';
-          // Use totalSale first (main field), then fallbacks
-          const price = (Number(m.totalSale) || Number(m.totalCost) || (Number(m.salePrice || 0) * qty) || 0) * combinedMultiplier * markupRatio;
-          return `
-            <tr style="background:${idx % 2 === 0 ? '#fff' : '#fafaf9'}">
-              <td style="padding:10px 12px;border:1px solid #e5e5e5;"><strong>${name}</strong></td>
-              <td style="padding:10px 12px;border:1px solid #e5e5e5;text-align:center;">${qty} ${unit}</td>
-              <td style="padding:10px 12px;border:1px solid #e5e5e5;text-align:right;font-weight:700;">${formatCurrency(price)}</td>
-            </tr>
-          `;
-        }).join('')}</tbody>
-    </table>
-    ` : ''}
-
-    ${products.length > 0 ? `
-    <div class="section-title">${t.products}</div>
-    <table class="table">
-        <thead><tr><th>${t.product}</th><th style="text-align:center;">${t.quantity}</th><th style="text-align:right;">${t.price}</th></tr></thead>
-        <tbody>${productsHtml}</tbody>
-    </table>
-    ` : ''}
-
-    ${servicesHtml ? `
-    <div class="section-title">${t.services}</div>
-    <table class="table">
-        <thead><tr><th>${t.service}</th><th style="text-align:right;">${t.price}</th></tr></thead>
-        <tbody>${servicesHtml}</tbody>
-    </table>
-    ` : ''}
-
-    <div class="section-title">${t.conditions}</div>
-    <table class="table">
-        <tr><td style="width:50%;padding:10px 12px;border:1px solid #e5e5e5;">${t.deliveryTime}</td><td style="padding:10px 12px;border:1px solid #e5e5e5;"><strong>${deliveryDays} ${t.workingDays}</strong></td></tr>
-        <tr style="background:#fafaf9;"><td style="padding:10px 12px;border:1px solid #e5e5e5;">${t.offerValidity}</td><td style="padding:10px 12px;border:1px solid #e5e5e5;"><strong>14 ${t.days}</strong></td></tr>
-    </table>
-
-    <div class="section-title">${t.priceSummary}</div>
-    <table class="summary-table">
-        <tr><td class="label">${t.subtotal}</td><td class="value">${formatCurrency(globalTotal)}</td></tr>
-        <tr><td class="label">${isForeign ? t.reverseCharge : t.vat} ${effectiveVatRate}%</td><td class="value">${formatCurrency(vatAmount)}</td></tr>
-        <tr class="total-row"><td>${isForeign ? t.totalNet : t.totalWithVat}</td><td class="value">${formatCurrency(totalWithVat)}</td></tr>
-    </table>
-
-    <div class="footer">
-        ${t.footer}
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="doc-box">
+                <div class="doc-title">${t.docTitle}</div>
+                <div class="doc-number">${tr(calculation.name) || calculation.calculationNumber}</div>
+                <div style="font-size:10px;color:#666;margin-top:5px;">${currentDate}</div>
+            </div>
+        </div>
     </div>
+
+    <!-- Customer info -->
+    <div class="customer-row">
+        <div class="customer-box">
+            <div class="box-label">${t.customer}</div>
+            <div class="customer-name">${clientName}</div>
+            <div class="customer-details">
+                ${clientAddress ? `${clientAddress}<br>` : ''}
+                ${clientIco ? `IČO: ${clientIco}` : ''} ${clientDic ? `· DIČ: ${clientDic}` : ''}<br>
+                ${clientIcDph ? `IČ DPH: ${clientIcDph}<br>` : ''}
+                ${clientEmail}${clientPhone ? ` · ${clientPhone}` : ''}
+            </div>
+        </div>
+        <div class="customer-box">
+            <div class="box-label">${t.deliveryAddress}</div>
+            <div class="customer-details" style="margin-top:8px;">
+                ${clientAddress || (lang === 'de-AT' ? 'Österreich' : lang === 'en' ? 'Slovakia' : 'Slovenská republika')}
+            </div>
+        </div>
+    </div>
+
+    <!-- Dates -->
+    <div class="dates-box">
+        <div class="dates-row">
+            <div class="date-item">
+                <div class="date-label">${t.date}</div>
+                <div class="date-value">${currentDate}</div>
+            </div>
+            <div class="date-item">
+                <div class="date-label">${t.validity}</div>
+                <div class="date-value">${validityDateStr}</div>
+            </div>
+            <div class="date-item">
+                <div class="date-label">${t.deliveryTime}</div>
+                <div class="date-value">${deliveryDays} ${t.workingDays}</div>
+            </div>
+        </div>
+                </div>
+
+    <!-- Items Table -->
+    <div class="section-title">${t.items}</div>
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th style="width:35%;">${t.name}</th>
+                <th class="c" style="width:8%;">${t.count}</th>
+                <th class="c" style="width:6%;">${t.unit}</th>
+                <th class="r" style="width:12%;">${t.unitPrice}</th>
+                <th class="r" style="width:12%;">${t.price}</th>
+                <th class="c" style="width:7%;">${t.vat}%</th>
+                <th class="r" style="width:10%;">${t.vat}</th>
+                <th class="r" style="width:10%;">${t.total}</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${allItems.map((item) => `
+            <tr>
+                <td>
+                    <div class="item-name">${item.name}</div>
+                    ${item.description ? `<div class="item-desc">${item.description}</div>` : ''}
+            </td>
+                <td class="c">${item.qty.toFixed(2)}</td>
+                <td class="c">${item.unit}</td>
+                <td class="r">${formatCurrency(item.unitPrice)}</td>
+                <td class="r">${formatCurrency(item.total)}</td>
+                <td class="c">${item.vatRate}%</td>
+                <td class="r">${formatCurrency(item.vatAmount)}</td>
+                <td class="r" style="font-weight:600;">${formatCurrency(item.totalWithVat)}</td>
+            </tr>
+            `).join('')}
+        </tbody>
+    </table>
+
+    <!-- Summary -->
+    <div class="summary-row">
+        <div class="summary-left"></div>
+        <div class="summary-right">
+            <div class="vat-table">
+                <div class="vat-header">
+                    <div class="vat-header-cell" style="width:40%;">${t.vat} ${effectiveVatRate}%</div>
+                    <div class="vat-header-cell" style="width:30%;">${t.vatBase}</div>
+                    <div class="vat-header-cell" style="width:30%;text-align:right;">${t.total}</div>
+                </div>
+                <div class="vat-row">
+                    <div class="vat-cell" style="width:40%;">${isForeign ? t.reverseCharge : `${t.vat} ${effectiveVatRate}%`}</div>
+                    <div class="vat-cell" style="width:30%;">${formatCurrency(globalTotal)}</div>
+                    <div class="vat-cell" style="width:30%;text-align:right;">${formatCurrency(totalWithVat)}</div>
+                </div>
+                <div class="vat-total-row">
+                    <div class="vat-total-label">${isForeign ? t.totalNet : t.totalToPay}</div>
+                    <div class="vat-total-value">${formatCurrency(totalWithVat)}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conditions -->
+    <div class="conditions-box">
+        <div class="conditions-title">${t.conditions}</div>
+        <div class="conditions-item">
+            <div class="conditions-label">${t.deliveryTime}:</div>
+            <div class="conditions-value">${deliveryDays} ${t.workingDays}</div>
+        </div>
+        <div class="conditions-item">
+            <div class="conditions-label">${t.offerValidity}:</div>
+            <div class="conditions-value">14 ${t.days}</div>
+        </div>
+        ${isForeign ? `
+        <div class="conditions-item">
+            <div class="conditions-label">${t.vat}:</div>
+            <div class="conditions-value">${t.reverseCharge}</div>
+        </div>
+    ` : ''}
+    </div>
+
+    <!-- Footer bar -->
+    <div class="footer-bar">
+        <div class="footer-bar-item" style="width:50%;">
+            <div class="footer-bar-label">Telefónne číslo:</div>
+            <div class="footer-bar-value">${invoicing.phone || ""}</div>
+        </div>
+        <div class="footer-bar-item" style="width:50%; text-align:right;">
+            <div class="footer-bar-label">Email:</div>
+            <div class="footer-bar-value">${invoicing.email || ""}</div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-center">${t.footer}</div>
+    </div>
+</div>
 </body>
 </html>
     `;
