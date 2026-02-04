@@ -133,6 +133,10 @@ export const GET: APIRoute = async ({ params, url }) => {
     const materials = calculationData.materials || [];
     const client = calculationData.selectedClient || {};
 
+    // Debug: log client data to see what fields are available
+    console.log('📋 [PDF] Client data keys:', Object.keys(client));
+    console.log('📋 [PDF] Client data sample:', JSON.stringify(client).substring(0, 500));
+
     // Get global pricing multipliers (client rating + delivery term) - same as main quote page
     const globalPricing = calculationData.globalPricingBreakdown || {};
     const clientMultiplier = Number(globalPricing.clientMultiplier) || 1;
@@ -282,17 +286,25 @@ export const GET: APIRoute = async ({ params, url }) => {
     const clientName = client.name || client["Názov"] || client["Obchodné meno"] || client.companyName || client.company || "Klient";
     
     // Build address from various possible field names (support Flowii CRM, normalized, and invoicing fields)
+    // Also check camelCase versions from direct DB fields
     const street = client.businessAddress || client.invoicingAddress || client.street || 
       client["Fakturačná adresa - ulica"] || client["Korešpondenčná adresa - ulica"] || 
-      client["Ulica"] || client.billingStreet || client.address || "";
+      client["Adresa - ulica"] || client["Ulica"] || 
+      client.billingStreet || client.billing_street || client.corrStreet || client.corr_street ||
+      client.address || "";
     const postalCode = client.businessPostalCode || client.invoicingPostalCode || client.postalCode || 
       client["Fakturačná adresa - PSČ"] || client["Korešpondenčná adresa - PSČ"] || 
-      client["PSČ"] || client.billingPostalCode || client.zip || "";
+      client["Adresa - PSČ"] || client["PSČ"] || 
+      client.billingPostalCode || client.billing_postal_code || client.corrPostalCode || client.corr_postal_code ||
+      client.zip || "";
     const city = client.businessCity || client.invoicingCity || client.city || 
       client["Fakturačná adresa - mesto"] || client["Korešpondenčná adresa - mesto"] || 
-      client["Mesto"] || client.billingCity || "";
+      client["Adresa - mesto"] || client["Mesto"] || 
+      client.billingCity || client.billing_city || client.corrCity || client.corr_city || "";
     const country = client.businessCountry || client.invoicingCountry || client.country || 
-      client["Fakturačná adresa - krajina"] || client["Krajina"] || client.billingCountry || "";
+      client["Fakturačná adresa - krajina"] || client["Korešpondenčná adresa - krajina"] ||
+      client["Adresa - krajina"] || client["Krajina"] || 
+      client.billingCountry || client.billing_country || client.corrCountry || client.corr_country || "";
     
     const clientAddress = [street, postalCode, city, country].filter(Boolean).join(", ");
     const clientIco = client.ico || client["IČO"] || client.businessId || client.companyId || "";
