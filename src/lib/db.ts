@@ -3008,7 +3008,6 @@ export async function getCustomerById(customerId: string): Promise<any | null> {
           billing_postal_code as billingPostalCode,
           billing_city as billingCity,
           billing_country as billingCountry,
-          billing_country_code as billingCountryCode,
           corr_street as corrStreet,
           corr_postal_code as corrPostalCode,
           corr_city as corrCity,
@@ -3020,8 +3019,7 @@ export async function getCustomerById(customerId: string): Promise<any | null> {
           contact_first_name as contactFirstName,
           contact_last_name as contactLastName,
           contact_email as contactEmail,
-          contact_phone1 as contactPhone1,
-          contact_phone2 as contactPhone2
+          contact_phone1 as contactPhone1
         FROM customers 
         WHERE id = ? OR entity_id = ?
         LIMIT 1
@@ -3031,7 +3029,16 @@ export async function getCustomerById(customerId: string): Promise<any | null> {
     
     if (result.rows.length === 0) return null;
     
-    return result.rows[0];
+    const row = result.rows[0] as any;
+    
+    // Normalize: use delivery address if billing is empty
+    return {
+      ...row,
+      billingStreet: row.billingStreet || row.deliveryStreet || row.corrStreet,
+      billingCity: row.billingCity || row.deliveryCity || row.corrCity,
+      billingPostalCode: row.billingPostalCode || row.deliveryPostalCode || row.corrPostalCode,
+      billingCountry: row.billingCountry || row.deliveryCountry || row.corrCountry,
+    };
   } catch (error) {
     console.error('[getCustomerById] Error:', error);
     return null;
