@@ -2,6 +2,25 @@ import type { APIRoute } from 'astro';
 import { getCalculationByShareToken } from '../../../../../lib/db';
 import { translateBatch } from '../../../../../lib/translate';
 import puppeteer from 'puppeteer';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Cache for logo base64
+let logoBase64Cache: string | null = null;
+
+async function getLogoBase64(): Promise<string> {
+  if (logoBase64Cache) return logoBase64Cache;
+  
+  try {
+    const logoPath = path.join(process.cwd(), 'public', 'images', 'adsun logo.jpg');
+    const logoBuffer = await fs.promises.readFile(logoPath);
+    logoBase64Cache = `data:image/jpeg;base64,${logoBuffer.toString('base64')}`;
+    return logoBase64Cache;
+  } catch (error) {
+    console.warn('Could not load logo:', error);
+    return '';
+  }
+}
 
 // Translations for PDF
 const PDF_TRANSLATIONS = {
@@ -289,6 +308,9 @@ export const GET: APIRoute = async ({ params, url }) => {
     // Delivery days
     const deliveryDays = calculationData.overallDeliveryDays || 10;
 
+    // Load logo
+    const logoBase64 = await getLogoBase64();
+
     // Generate HTML
     const dateLocale = lang === 'de-AT' ? 'de-AT' : lang === 'en' ? 'en-GB' : 'sk-SK';
     const html = `
@@ -325,7 +347,10 @@ export const GET: APIRoute = async ({ params, url }) => {
     <table class="header-table">
         <tr>
             <td style="width:50%;vertical-align:middle;">
-                <div style="font-size:22px;font-weight:700;color:#f59e0b;">${orgName}</div>
+                ${logoBase64 
+                  ? `<img src="${logoBase64}" alt="${orgName}" style="max-height:60px;max-width:200px;" />`
+                  : `<div style="font-size:22px;font-weight:700;color:#f59e0b;">${orgName}</div>`
+                }
             </td>
             <td style="width:50%;vertical-align:middle;text-align:right;">
                 <div class="doc-title">${t.docTitle}</div>
