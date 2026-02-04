@@ -260,20 +260,27 @@ export const GET: APIRoute = async ({ params, url }) => {
       }).join("");
 
     // Client info - support multiple field name formats
-    const clientName = client.name || client["Názov"] || client.companyName || client.company || "Klient";
+    const clientName = client.name || client["Názov"] || client["Obchodné meno"] || client.companyName || client.company || "Klient";
     
-    // Build address from various possible field names
-    const street = client.businessAddress || client.street || client["Korešpondenčná adresa - ulica"] || client["Ulica"] || client.address || "";
-    const postalCode = client.businessPostalCode || client.postalCode || client["Korešpondenčná adresa - PSČ"] || client["PSČ"] || client.zip || "";
-    const city = client.businessCity || client.city || client["Korešpondenčná adresa - mesto"] || client["Mesto"] || "";
-    const country = client.country || client["Krajina"] || "";
+    // Build address from various possible field names (support Flowii CRM, normalized, and invoicing fields)
+    const street = client.businessAddress || client.invoicingAddress || client.street || 
+      client["Fakturačná adresa - ulica"] || client["Korešpondenčná adresa - ulica"] || 
+      client["Ulica"] || client.billingStreet || client.address || "";
+    const postalCode = client.businessPostalCode || client.invoicingPostalCode || client.postalCode || 
+      client["Fakturačná adresa - PSČ"] || client["Korešpondenčná adresa - PSČ"] || 
+      client["PSČ"] || client.billingPostalCode || client.zip || "";
+    const city = client.businessCity || client.invoicingCity || client.city || 
+      client["Fakturačná adresa - mesto"] || client["Korešpondenčná adresa - mesto"] || 
+      client["Mesto"] || client.billingCity || "";
+    const country = client.businessCountry || client.invoicingCountry || client.country || 
+      client["Fakturačná adresa - krajina"] || client["Krajina"] || client.billingCountry || "";
     
     const clientAddress = [street, postalCode, city, country].filter(Boolean).join(", ");
     const clientIco = client.ico || client["IČO"] || client.businessId || client.companyId || "";
     const clientDic = client.dic || client["DIČ"] || client.taxId || "";
     const clientIcDph = client.icDph || client["IČ DPH"] || client.vatId || client.vatNumber || "";
-    const clientEmail = client.email || client["Hlavný kontakt - email"] || client["Email"] || "";
-    const clientPhone = client.phone || client["Hlavný kontakt - telefón 1"] || client["Telefón"] || client.tel || "";
+    const clientEmail = client.email || client["Hlavný kontakt - email"] || client["Email"] || client.contactEmail || "";
+    const clientPhone = client.phone || client["Hlavný kontakt - telefón 1"] || client["Telefón"] || client.contactPhone1 || client.tel || "";
 
     // Org info
     const orgName = invoicing.companyName || organization?.name || "Spoločnosť";
