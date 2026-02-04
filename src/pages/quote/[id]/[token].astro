@@ -555,22 +555,43 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
             class="w-full flex items-center justify-between py-4 px-5 glass rounded-2xl hover:bg-white/5 transition-all mb-4 animate-fade-in-up"
           >
             <div class="flex items-center gap-4">
-              <div class="flex items-center gap-2">
-                <span class="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                  <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                    <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" clip-rule="evenodd" />
-                  </svg>
-                </span>
-                <div class="text-left">
-                  <div class="font-semibold text-white">{products.length} {products.length === 1 ? t.product : t.productsPlural}</div>
-                  <div class="text-xs text-slate-400">
-                    {products.slice(0, 2).map((p: any) => getProductName(p)).join(', ')}
-                    {products.length > 2 && '...'}
+              {/* Materials first */}
+              {materials.length > 0 && (
+                <div class="flex items-center gap-2">
+                  <span class="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
+                    <svg class="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </span>
+                  <div class="text-left">
+                    <div class="font-semibold text-white">{materials.length} {isGerman ? (materials.length === 1 ? 'Material' : 'Materialien') : (materials.length === 1 ? 'materiál' : 'materiály')}</div>
                   </div>
                 </div>
-              </div>
+              )}
               
+              {/* Products */}
+              {products.length > 0 && (
+                <>
+                  {materials.length > 0 && <div class="w-px h-10 bg-slate-700"></div>}
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                      <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
+                        <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" clip-rule="evenodd" />
+                      </svg>
+                    </span>
+                    <div class="text-left">
+                      <div class="font-semibold text-white">{products.length} {products.length === 1 ? t.product : t.productsPlural}</div>
+                      <div class="text-xs text-slate-400">
+                        {products.slice(0, 2).map((p: any) => getProductName(p)).join(', ')}
+                        {products.length > 2 && '...'}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+              
+              {/* Services */}
               {services.length > 0 && (
                 <>
                   <div class="w-px h-10 bg-slate-700"></div>
@@ -587,22 +608,6 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                   </div>
                 </>
               )}
-              
-              {materials.length > 0 && (
-                <>
-                  <div class="w-px h-10 bg-slate-700"></div>
-                  <div class="flex items-center gap-2">
-                    <span class="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
-                      <svg class="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                      </svg>
-                    </span>
-                    <div class="text-left">
-                      <div class="font-semibold text-white">{materials.length} {isGerman ? (materials.length === 1 ? 'Material' : 'Materialien') : (materials.length === 1 ? 'materiál' : 'materiály')}</div>
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
             
             <div class="flex items-center gap-2 text-emerald-400">
@@ -615,6 +620,36 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
 
           {/* Details Panel (hidden by default) */}
           <div id="detailsPanel" class="hidden mb-4 glass rounded-2xl overflow-hidden animate-fade-in-up stagger-1">
+            {/* Materials - shown first if present */}
+            {materials.length > 0 && (
+              <div class="p-5 border-b border-slate-700/50">
+                <h4 class="font-semibold text-white mb-3 flex items-center gap-2">
+                  <span class="w-6 h-6 bg-orange-500/20 rounded-md flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </span>
+                  {isGerman ? 'Materialien' : 'Materiály'}
+                </h4>
+                <div class="space-y-2">
+                  {materials.map((m: any, idx: number) => {
+                    const materialPrice = Number(m.totalCost) || (Number(m.salePrice || 0) * Number(m.quantity || 1)) || 0;
+                    const quantity = Number(m.quantity) || 1;
+                    const unit = m.unit || 'ks';
+                    return (
+                      <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
+                        <span class="text-slate-300 font-medium">
+                          {getMaterialName(m) || (isGerman ? 'Material' : 'Materiál')}
+                          <span class="text-slate-500 font-normal ml-2">× {quantity} {unit}</span>
+                        </span>
+                        <span class="font-semibold text-white">{formatCurrency(materialPrice * combinedMultiplier)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
             {/* Products */}
             {products.length > 0 && (
               <div class="p-5 border-b border-slate-700/50">
@@ -714,36 +749,6 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                       <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
                         <span class="text-slate-300 font-medium">{getServiceName(s) || (isGerman ? 'Dienstleistung' : 'Služba')}</span>
                         <span class="font-semibold text-white">{formatCurrency(salePrice)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            
-            {/* Materials */}
-            {materials.length > 0 && (
-              <div class="p-5 border-b border-slate-700/50">
-                <h4 class="font-semibold text-white mb-3 flex items-center gap-2">
-                  <span class="w-6 h-6 bg-orange-500/20 rounded-md flex items-center justify-center">
-                    <svg class="w-3.5 h-3.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                  </span>
-                  {isGerman ? 'Materialien' : 'Materiály'}
-                </h4>
-                <div class="space-y-2">
-                  {materials.map((m: any, idx: number) => {
-                    const materialPrice = Number(m.totalCost) || (Number(m.salePrice || 0) * Number(m.quantity || 1)) || 0;
-                    const quantity = Number(m.quantity) || 1;
-                    const unit = m.unit || 'ks';
-                    return (
-                      <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
-                        <span class="text-slate-300 font-medium">
-                          {getMaterialName(m) || (isGerman ? 'Material' : 'Materiál')}
-                          <span class="text-slate-500 font-normal ml-2">× {quantity} {unit}</span>
-                        </span>
-                        <span class="font-semibold text-white">{formatCurrency(materialPrice * combinedMultiplier)}</span>
                       </div>
                     );
                   })}

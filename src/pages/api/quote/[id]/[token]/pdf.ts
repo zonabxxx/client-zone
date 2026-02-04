@@ -259,18 +259,21 @@ export const GET: APIRoute = async ({ params, url }) => {
         `;
       }).join("");
 
-    // Client info
-    const clientName = client.name || client["Názov"] || client.companyName || "Klient";
-    const clientAddress = [
-      client.businessAddress || client["Korešpondenčná adresa - ulica"],
-      client.businessPostalCode || client["Korešpondenčná adresa - PSČ"],
-      client.businessCity || client["Korešpondenčná adresa - mesto"],
-    ].filter(Boolean).join(", ");
-    const clientIco = client.ico || client["IČO"] || client.businessId || "";
-    const clientDic = client.dic || client["DIČ"] || "";
-    const clientIcDph = client.icDph || client["IČ DPH"] || client.vatId || "";
-    const clientEmail = client.email || client["Hlavný kontakt - email"] || "";
-    const clientPhone = client.phone || client["Hlavný kontakt - telefón 1"] || "";
+    // Client info - support multiple field name formats
+    const clientName = client.name || client["Názov"] || client.companyName || client.company || "Klient";
+    
+    // Build address from various possible field names
+    const street = client.businessAddress || client.street || client["Korešpondenčná adresa - ulica"] || client["Ulica"] || client.address || "";
+    const postalCode = client.businessPostalCode || client.postalCode || client["Korešpondenčná adresa - PSČ"] || client["PSČ"] || client.zip || "";
+    const city = client.businessCity || client.city || client["Korešpondenčná adresa - mesto"] || client["Mesto"] || "";
+    const country = client.country || client["Krajina"] || "";
+    
+    const clientAddress = [street, postalCode, city, country].filter(Boolean).join(", ");
+    const clientIco = client.ico || client["IČO"] || client.businessId || client.companyId || "";
+    const clientDic = client.dic || client["DIČ"] || client.taxId || "";
+    const clientIcDph = client.icDph || client["IČ DPH"] || client.vatId || client.vatNumber || "";
+    const clientEmail = client.email || client["Hlavný kontakt - email"] || client["Email"] || "";
+    const clientPhone = client.phone || client["Hlavný kontakt - telefón 1"] || client["Telefón"] || client.tel || "";
 
     // Org info
     const orgName = invoicing.companyName || organization?.name || "Spoločnosť";
@@ -351,6 +354,27 @@ export const GET: APIRoute = async ({ params, url }) => {
             </td>
         </tr>
     </table>
+
+    ${materials.length > 0 ? `
+    <div class="section-title">${t.materials}</div>
+    <table class="table">
+        <thead><tr><th>${t.material}</th><th style="text-align:center;">${t.quantity}</th><th style="text-align:right;">${t.price}</th></tr></thead>
+        <tbody>${materials.map((m: any, idx: number) => {
+          const rawName = m.material?.name || m.name || m.materialName || t.material;
+          const name = tr(rawName);
+          const qty = Number(m.quantity) || 1;
+          const unit = m.unit || 'ks';
+          const price = (Number(m.totalCost) || (Number(m.salePrice || 0) * qty) || 0) * combinedMultiplier * markupRatio;
+          return `
+            <tr style="background:${idx % 2 === 0 ? '#fff' : '#fafaf9'}">
+              <td style="padding:10px 12px;border:1px solid #e5e5e5;"><strong>${name}</strong></td>
+              <td style="padding:10px 12px;border:1px solid #e5e5e5;text-align:center;">${qty} ${unit}</td>
+              <td style="padding:10px 12px;border:1px solid #e5e5e5;text-align:right;font-weight:700;">${formatCurrency(price)}</td>
+            </tr>
+          `;
+        }).join('')}</tbody>
+    </table>
+    ` : ''}
 
     ${products.length > 0 ? `
     <div class="section-title">${t.products}</div>
