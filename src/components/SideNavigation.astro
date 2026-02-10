@@ -168,6 +168,25 @@ const bottomItems = [
         info@adsun.sk
       </div>
     </a>
+    
+    <!-- Divider -->
+    <div class="w-8 h-px bg-gradient-to-r from-transparent via-[#333] to-transparent my-2 mx-auto"></div>
+    
+    <!-- Logout button -->
+    <button 
+      id="sideNavLogoutBtn"
+      class="side-nav-icon group relative text-[#6b7280] hover:text-red-400 transition-colors"
+      title="Odhlásiť sa"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+      <div class="absolute left-full ml-2 px-3 py-1.5 bg-[#1a1a1a] text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap border border-[#333]">
+        Odhlásiť sa
+      </div>
+    </button>
   </div>
 </nav>
 
@@ -246,5 +265,34 @@ const bottomItems = [
         <span class="text-[10px] font-medium">{item.label.split(' ')[0]}</span>
       </a>
     ))}
+    
+    <!-- Mobile Logout button -->
+    <button 
+      id="mobileNavLogoutBtn"
+      class="flex flex-col items-center gap-1 py-2 px-3 rounded-lg transition-all text-[#6b7280] hover:text-red-400"
+      title="Odhlásiť sa"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+      <span class="text-[10px] font-medium">Odhlásiť</span>
+    </button>
   </div>
 </nav>
+
+<script>
+  async function handleLogout() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/';
+    } catch (e) {
+      console.error('Logout failed:', e);
+      window.location.href = '/';
+    }
+  }
+
+  document.getElementById('sideNavLogoutBtn')?.addEventListener('click', handleLogout);
+  document.getElementById('mobileNavLogoutBtn')?.addEventListener('click', handleLogout);
+</script>
