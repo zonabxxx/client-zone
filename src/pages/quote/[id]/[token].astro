@@ -612,14 +612,14 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
             
             <div class="flex items-center gap-2 text-emerald-400">
               <span class="text-sm font-medium">{t.details}</span>
-              <svg id="chevronIcon" class="w-5 h-5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg id="chevronIcon" class="w-5 h-5 transition-transform rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
             </div>
           </button>
 
-          {/* Details Panel (hidden by default) */}
-          <div id="detailsPanel" class="hidden mb-4 glass rounded-2xl overflow-hidden animate-fade-in-up stagger-1">
+          {/* Details Panel (open by default) */}
+          <div id="detailsPanel" class="mb-4 glass rounded-2xl overflow-hidden animate-fade-in-up stagger-1">
             {/* Materials - shown first if present */}
             {materials.length > 0 && (
               <div class="p-5 border-b border-slate-700/50">
@@ -636,13 +636,21 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                     const materialPrice = Number(m.totalSale) || Number(m.totalCost) || (Number(m.salePrice || 0) * Number(m.quantity || 1)) || 0;
                     const quantity = Number(m.quantity) || 1;
                     const unit = m.unit || 'ks';
+                    const materialTotalDisplay = materialPrice * combinedMultiplier;
+                    const materialUnitPrice = quantity > 0 ? materialTotalDisplay / quantity : materialTotalDisplay;
                     return (
-                      <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
-                        <span class="text-slate-300 font-medium">
-                          {getMaterialName(m) || (isGerman ? 'Material' : 'Materiál')}
-                          <span class="text-slate-500 font-normal ml-2">× {quantity} {unit}</span>
-                        </span>
-                        <span class="font-semibold text-white">{formatCurrency(materialPrice * combinedMultiplier)}</span>
+                      <div class="flex justify-between items-center py-2 px-3 bg-slate-800/50 rounded-lg">
+                        <div class="flex flex-col">
+                          <span class="text-slate-300 font-medium">
+                            {getMaterialName(m) || (isGerman ? 'Material' : 'Materiál')}
+                          </span>
+                          {quantity > 1 && (
+                            <span class="text-xs text-slate-500 mt-0.5">
+                              {quantity} {unit} × {formatCurrency(materialUnitPrice)}
+                            </span>
+                          )}
+                        </div>
+                        <span class="font-semibold text-white">{formatCurrency(materialTotalDisplay)}</span>
                       </div>
                     );
                   })}
@@ -679,14 +687,24 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                     
                     const description = getProductDescription(p);
                     
+                    const productQty = Number(p.quantity) || 1;
+                    const productTotalDisplay = computeProductTotal(p);
+                    const productUnitPrice = productQty > 0 ? productTotalDisplay / productQty : productTotalDisplay;
+                    
                     return (
                       <div class="py-3 px-4 bg-slate-800/50 rounded-lg">
                         <div class="flex justify-between items-start mb-2">
-                          <span class="text-slate-300 font-medium">
-                            {getProductName(p)}
-                            <span class="text-slate-500 font-normal ml-2">× {Number(p.quantity) || 1} {t.pcs}</span>
-                          </span>
-                          <span class="font-semibold text-white">{formatCurrency(computeProductTotal(p))}</span>
+                          <div class="flex flex-col">
+                            <span class="text-slate-300 font-medium">
+                              {getProductName(p)}
+                            </span>
+                            {productQty > 1 && (
+                              <span class="text-xs text-slate-500 mt-0.5">
+                                {productQty} {t.pcs} × {formatCurrency(productUnitPrice)}
+                              </span>
+                            )}
+                          </div>
+                          <span class="font-semibold text-white">{formatCurrency(productTotalDisplay)}</span>
                         </div>
                         
                         {/* Product Specifications - show all available specs */}
@@ -744,11 +762,36 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                 <div class="space-y-2">
                   {services.map((s: any, idx: number) => {
                     // Use SALE price: totalSale or calculatedPrice, NOT calculatedCost
-                    const salePrice = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
+                    const serviceTotalPrice = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
+                    
+                    // Determine quantity and unit based on pricing model
+                    const pricingModel = s.pricingModel || 'fixed';
+                    let serviceQty = 1;
+                    let serviceUnit = s.unit || 'ks';
+                    let serviceUnitPrice = serviceTotalPrice;
+                    
+                    if (pricingModel === 'hourly') {
+                      serviceQty = Number(s.inputValues?.hours) || 1;
+                      serviceUnit = isGerman ? 'Std.' : 'hod';
+                      serviceUnitPrice = serviceQty > 0 ? serviceTotalPrice / serviceQty : serviceTotalPrice;
+                    } else if (pricingModel === 'unit') {
+                      serviceQty = Number(s.inputValues?.quantity) || 1;
+                      serviceUnitPrice = serviceQty > 0 ? serviceTotalPrice / serviceQty : serviceTotalPrice;
+                    }
+                    
+                    const showBreakdown = serviceQty > 1;
+                    
                     return (
-                      <div class="flex justify-between py-2 px-3 bg-slate-800/50 rounded-lg">
-                        <span class="text-slate-300 font-medium">{getServiceName(s) || (isGerman ? 'Dienstleistung' : 'Služba')}</span>
-                        <span class="font-semibold text-white">{formatCurrency(salePrice)}</span>
+                      <div class="flex justify-between items-center py-2 px-3 bg-slate-800/50 rounded-lg">
+                        <div class="flex flex-col">
+                          <span class="text-slate-300 font-medium">{getServiceName(s) || (isGerman ? 'Dienstleistung' : 'Služba')}</span>
+                          {showBreakdown && (
+                            <span class="text-xs text-slate-500 mt-0.5">
+                              {serviceQty} {serviceUnit} × {formatCurrency(serviceUnitPrice)}
+                            </span>
+                          )}
+                        </div>
+                        <span class="font-semibold text-white">{formatCurrency(serviceTotalPrice)}</span>
                       </div>
                     );
                   })}
