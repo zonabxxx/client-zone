@@ -619,10 +619,10 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
           </button>
 
           {/* Details Panel (open by default) */}
-          <div id="detailsPanel" class="mb-4 glass rounded-2xl overflow-hidden animate-fade-in-up stagger-1">
+          <div id="detailsPanel" class="mb-4 space-y-4 animate-fade-in-up stagger-1">
             {/* Materials - shown first if present */}
             {materials.length > 0 && (
-              <div class="p-5 border-b border-slate-700/50">
+              <div class="p-5 glass rounded-2xl border border-orange-500/10">
                 <h4 class="font-semibold text-white mb-3 flex items-center gap-2">
                   <span class="w-6 h-6 bg-orange-500/20 rounded-md flex items-center justify-center">
                     <svg class="w-3.5 h-3.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -660,7 +660,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
             
             {/* Products */}
             {products.length > 0 && (
-              <div class="p-5 border-b border-slate-700/50">
+              <div class="p-5 glass rounded-2xl border border-emerald-500/10">
                 <h4 class="font-semibold text-white mb-3 flex items-center gap-2">
                   <span class="w-6 h-6 bg-emerald-500/20 rounded-md flex items-center justify-center">
                     <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
@@ -749,7 +749,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
             
             {/* Services */}
             {services.length > 0 && (
-              <div class="p-5 border-b border-slate-700/50">
+              <div class="p-5 glass rounded-2xl border border-blue-500/10">
                 <h4 class="font-semibold text-white mb-3 flex items-center gap-2">
                   <span class="w-6 h-6 bg-blue-500/20 rounded-md flex items-center justify-center">
                     <svg class="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -800,7 +800,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
             )}
             
             {/* Summary */}
-            <div class="p-5 bg-slate-800/30">
+            <div class="p-5 glass rounded-2xl">
               <div class="space-y-2">
                 <div class="flex justify-between py-1">
                   <span class="text-slate-400">{t.subtotalWithoutVat}</span>
