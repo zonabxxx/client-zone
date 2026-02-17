@@ -549,70 +549,32 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
 
       {!isExpired && !isWaitingForClient && (
         <>
-          {/* Quick Summary */}
+          {/* Section Header - Quote Breakdown */}
           <button 
             id="toggleDetailsBtn"
-            class="w-full flex items-center justify-between py-4 px-5 glass rounded-2xl hover:bg-white/5 transition-all mb-4 animate-fade-in-up"
+            class="w-full flex items-center justify-between py-3 px-1 mb-2 hover:opacity-80 transition-all animate-fade-in-up group"
           >
-            <div class="flex items-center gap-4">
-              {/* Materials first */}
-              {materials.length > 0 && (
-                <div class="flex items-center gap-2">
-                  <span class="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
-                    <svg class="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                  </span>
-                  <div class="text-left">
-                    <div class="font-semibold text-white">{materials.length} {isGerman ? (materials.length === 1 ? 'Material' : 'Materialien') : (materials.length === 1 ? 'materiál' : 'materiály')}</div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Products */}
-              {products.length > 0 && (
-                <>
-                  {materials.length > 0 && <div class="w-px h-10 bg-slate-700"></div>}
-                  <div class="flex items-center gap-2">
-                    <span class="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                      <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                        <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" clip-rule="evenodd" />
-                      </svg>
-                    </span>
-                    <div class="text-left">
-                      <div class="font-semibold text-white">{products.length} {products.length === 1 ? t.product : t.productsPlural}</div>
-                      <div class="text-xs text-slate-400">
-                        {products.slice(0, 2).map((p: any) => getProductName(p)).join(', ')}
-                        {products.length > 2 && '...'}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-              
-              {/* Services */}
-              {services.length > 0 && (
-                <>
-                  <div class="w-px h-10 bg-slate-700"></div>
-                  <div class="flex items-center gap-2">
-                    <span class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                      <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </span>
-                    <div class="text-left">
-                      <div class="font-semibold text-white">{services.length} {services.length === 1 ? t.service : t.servicesPlural}</div>
-                    </div>
-                  </div>
-                </>
-              )}
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-xl flex items-center justify-center">
+                <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+              </div>
+              <div class="text-left">
+                <h3 class="text-lg font-bold text-white">{isGerman ? 'Angebotsdetails' : 'Rozpis ponuky'}</h3>
+                <p class="text-xs text-slate-500">
+                  {[
+                    products.length > 0 && `${products.length} ${products.length === 1 ? t.product : t.productsPlural}`,
+                    services.length > 0 && `${services.length} ${services.length === 1 ? t.service : t.servicesPlural}`,
+                    materials.length > 0 && `${materials.length} ${isGerman ? (materials.length === 1 ? 'Material' : 'Materialien') : (materials.length === 1 ? 'materiál' : 'materiály')}`,
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              </div>
             </div>
             
-            <div class="flex items-center gap-2 text-emerald-400">
-              <span class="text-sm font-medium">{t.details}</span>
-              <svg id="chevronIcon" class="w-5 h-5 transition-transform rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/50 group-hover:bg-slate-700/50 transition-colors">
+              <span class="text-xs text-slate-400" id="toggleLabel">{isGerman ? 'Ausblenden' : 'Skryť'}</span>
+              <svg id="chevronIcon" class="w-4 h-4 text-slate-400 transition-transform rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
             </div>
@@ -1088,10 +1050,18 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
   const detailsPanel = document.getElementById('detailsPanel');
   const chevronIcon = document.getElementById('chevronIcon');
   
+  const toggleLabel = document.getElementById('toggleLabel');
+  const isGermanPage = document.documentElement.lang === 'de' || window.location.search.includes('lang=de-AT');
+  
   if (toggleBtn && detailsPanel && chevronIcon) {
     toggleBtn.addEventListener('click', () => {
-      detailsPanel.classList.toggle('hidden');
+      const isHidden = detailsPanel.classList.toggle('hidden');
       chevronIcon.classList.toggle('rotate-180');
+      if (toggleLabel) {
+        toggleLabel.textContent = isHidden 
+          ? (isGermanPage ? 'Anzeigen' : 'Zobraziť') 
+          : (isGermanPage ? 'Ausblenden' : 'Skryť');
+      }
     });
   }
   
