@@ -563,11 +563,17 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
               <div class="text-left">
                 <h3 class="text-lg font-bold text-white">{isGerman ? 'Angebotsdetails' : 'Rozpis ponuky'}</h3>
                 <p class="text-xs text-slate-500">
-                  {[
-                    products.length > 0 && `${products.length} ${products.length === 1 ? t.product : t.productsPlural}`,
-                    services.length > 0 && `${services.length} ${services.length === 1 ? t.service : t.servicesPlural}`,
-                    materials.length > 0 && `${materials.length} ${isGerman ? (materials.length === 1 ? 'Material' : 'Materialien') : (materials.length === 1 ? 'materiál' : 'materiály')}`,
-                  ].filter(Boolean).join(' · ')}
+                  {(() => {
+                    const visibleServices = services.filter((s: any) => {
+                      const price = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
+                      return price > 0;
+                    });
+                    return [
+                      products.length > 0 && `${products.length} ${products.length === 1 ? t.product : t.productsPlural}`,
+                      visibleServices.length > 0 && `${visibleServices.length} ${visibleServices.length === 1 ? t.service : t.servicesPlural}`,
+                      materials.length > 0 && `${materials.length} ${isGerman ? (materials.length === 1 ? 'Material' : 'Materialien') : (materials.length === 1 ? 'materiál' : 'materiály')}`,
+                    ].filter(Boolean).join(' · ');
+                  })()}
                 </p>
               </div>
             </div>
@@ -656,18 +662,16 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                     return (
                       <div class="py-3 px-4 bg-slate-800/50 rounded-lg">
                         <div class="flex justify-between items-start mb-2">
-                          <div class="flex flex-col">
-                            <span class="text-slate-300 font-medium">
-                              {getProductName(p)}
-                            </span>
-                            {productQty > 1 && (
-                              <span class="text-sm text-slate-400 mt-0.5">
-                                {productQty} {t.pcs} × {formatCurrency(productUnitPrice)}
-                              </span>
-                            )}
-                          </div>
-                          <span class="font-semibold text-white">{formatCurrency(productTotalDisplay)}</span>
+                          <span class="text-slate-300 font-medium">
+                            {getProductName(p)}
+                          </span>
+                          <span class="font-bold text-white text-lg ml-4 whitespace-nowrap">{formatCurrency(productTotalDisplay)}</span>
                         </div>
+                        {productQty > 1 && (
+                          <div class="text-sm text-slate-400 mb-2">
+                            {productQty} {t.pcs} × {formatCurrency(productUnitPrice)} = <span class="font-medium text-slate-300">{formatCurrency(productTotalDisplay)}</span>
+                          </div>
+                        )}
                         
                         {/* Product Specifications - show all available specs */}
                         {hasSpecs && (
@@ -709,8 +713,11 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
               </div>
             )}
             
-            {/* Services */}
-            {services.length > 0 && (
+            {/* Services - hide services with 0 value */}
+            {services.filter((s: any) => {
+              const price = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
+              return price > 0;
+            }).length > 0 && (
               <div class="p-5 glass rounded-2xl border border-blue-500/10">
                 <h4 class="font-semibold text-white mb-3 flex items-center gap-2">
                   <span class="w-6 h-6 bg-blue-500/20 rounded-md flex items-center justify-center">
@@ -722,7 +729,10 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                   {t.services}
                 </h4>
                 <div class="space-y-2">
-                  {services.map((s: any, idx: number) => {
+                  {services.filter((s: any) => {
+                    const price = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
+                    return price > 0;
+                  }).map((s: any, idx: number) => {
                     // Use SALE price: totalSale or calculatedPrice, NOT calculatedCost
                     const serviceTotalPrice = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
                     
