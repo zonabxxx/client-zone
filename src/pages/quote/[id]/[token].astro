@@ -392,6 +392,12 @@ const deliveryDays = calculationData.overallDeliveryDays ?? null;
 // Format functions - use correct locale based on language
 function formatCurrency(n: number): string {
   const locale = isGerman ? 'de-AT' : 'sk-SK';
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
+}
+
+// Unit price formatting - preserve up to 4 decimal places for per-piece prices
+function formatUnitPrice(n: number): string {
+  const locale = isGerman ? 'de-AT' : 'sk-SK';
   return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n || 0);
 }
 
@@ -614,7 +620,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                           </span>
                           {quantity > 1 && (
                             <span class="text-sm text-slate-400 mt-0.5">
-                              {quantity} {unit} × {formatCurrency(materialUnitPrice)}
+                              {quantity} {unit} × {formatUnitPrice(materialUnitPrice)}
                             </span>
                           )}
                         </div>
@@ -669,7 +675,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                         </div>
                         {productQty > 1 && (
                           <div class="text-sm text-slate-400 mb-2">
-                            {productQty} {t.pcs} × {formatCurrency(productUnitPrice)} = <span class="font-medium text-slate-300">{formatCurrency(productTotalDisplay)}</span>
+                            {productQty} {t.pcs} × {formatUnitPrice(productUnitPrice)} = <span class="font-medium text-slate-300">{formatCurrency(productTotalDisplay)}</span>
                           </div>
                         )}
                         
@@ -759,7 +765,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                           <span class="text-slate-300 font-medium">{getServiceName(s) || (isGerman ? 'Dienstleistung' : 'Služba')}</span>
                           {showBreakdown && (
                             <span class="text-sm text-slate-400 mt-0.5">
-                              {serviceQty} {serviceUnit} × {formatCurrency(serviceUnitPrice)}
+                              {serviceQty} {serviceUnit} × {formatUnitPrice(serviceUnitPrice)}
                             </span>
                           )}
                         </div>

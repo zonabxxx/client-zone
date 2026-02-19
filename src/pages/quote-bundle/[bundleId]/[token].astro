@@ -57,7 +57,7 @@ const vatAmount = totalAmount * (vatRate / 100);
 const totalWithVat = totalAmount + vatAmount;
 
 function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('sk-SK', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n || 0);
+  return new Intl.NumberFormat('sk-SK', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 }
 
 function formatDate(date: Date | string | null): string {

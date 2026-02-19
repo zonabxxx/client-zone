@@ -252,6 +252,10 @@ export const GET: APIRoute = async ({ params, url }) => {
 
     // Format currency
     const formatCurrency = (n: number) => 
+      new Intl.NumberFormat(lang === 'de-AT' ? 'de-AT' : 'sk-SK', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
+    
+    // Unit price formatting - preserve up to 4 decimal places for per-piece prices
+    const formatUnitPrice = (n: number) => 
       new Intl.NumberFormat(lang === 'de-AT' ? 'de-AT' : 'sk-SK', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n || 0);
 
     // Translate product/service/material names AND calculation name if not Slovak
@@ -643,7 +647,7 @@ export const GET: APIRoute = async ({ params, url }) => {
             </td>
                 <td class="c">${item.qty.toFixed(2)}</td>
                 <td class="c">${item.unit}</td>
-                <td class="r">${formatCurrency(item.unitPrice)}</td>
+                <td class="r">${formatUnitPrice(item.unitPrice)}</td>
                 <td class="r">${formatCurrency(item.total)}</td>
                 <td class="c">${item.vatRate}%</td>
                 <td class="r">${formatCurrency(item.vatAmount)}</td>
