@@ -252,7 +252,7 @@ export const GET: APIRoute = async ({ params, url }) => {
 
     // Format currency
     const formatCurrency = (n: number) => 
-      new Intl.NumberFormat(lang === 'de-AT' ? 'de-AT' : 'sk-SK', { style: 'currency', currency: 'EUR' }).format(n || 0);
+      new Intl.NumberFormat(lang === 'de-AT' ? 'de-AT' : 'sk-SK', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n || 0);
 
     // Translate product/service/material names AND calculation name if not Slovak
     const translationMap = new Map<string, string>();

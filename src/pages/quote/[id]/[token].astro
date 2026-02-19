@@ -392,7 +392,7 @@ const deliveryDays = calculationData.overallDeliveryDays ?? null;
 // Format functions - use correct locale based on language
 function formatCurrency(n: number): string {
   const locale = isGerman ? 'de-AT' : 'sk-SK';
-  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(n || 0);
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n || 0);
 }
 
 function formatDate(date: Date | string | null): string {
@@ -607,7 +607,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                             {getMaterialName(m) || (isGerman ? 'Material' : 'Materiál')}
                           </span>
                           {quantity > 1 && (
-                            <span class="text-xs text-slate-500 mt-0.5">
+                            <span class="text-sm text-slate-400 mt-0.5">
                               {quantity} {unit} × {formatCurrency(materialUnitPrice)}
                             </span>
                           )}
@@ -661,7 +661,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                               {getProductName(p)}
                             </span>
                             {productQty > 1 && (
-                              <span class="text-xs text-slate-500 mt-0.5">
+                              <span class="text-sm text-slate-400 mt-0.5">
                                 {productQty} {t.pcs} × {formatCurrency(productUnitPrice)}
                               </span>
                             )}
@@ -748,7 +748,7 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                         <div class="flex flex-col">
                           <span class="text-slate-300 font-medium">{getServiceName(s) || (isGerman ? 'Dienstleistung' : 'Služba')}</span>
                           {showBreakdown && (
-                            <span class="text-xs text-slate-500 mt-0.5">
+                            <span class="text-sm text-slate-400 mt-0.5">
                               {serviceQty} {serviceUnit} × {formatCurrency(serviceUnitPrice)}
                             </span>
                           )}
