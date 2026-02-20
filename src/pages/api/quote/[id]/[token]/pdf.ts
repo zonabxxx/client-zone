@@ -164,7 +164,7 @@ export const GET: APIRoute = async ({ params, url }) => {
       return new Response(JSON.stringify({ error: 'Invalid share token' }), { status: 403 });
     }
 
-    const { calculation, share, organization } = result;
+    const { calculation, share, organization, salesMember } = result;
     const calculationData = calculation.calculationData || {};
     const invoicing = (organization as any)?.invoicing || {};
     const vatRate = invoicing.vatRate || 23;
@@ -572,7 +572,7 @@ export const GET: APIRoute = async ({ params, url }) => {
                     ${orgAddress}<br>
                     IČO: ${invoicing.ico || ""} · DIČ: ${invoicing.dic || ""}<br>
                     IČ DPH: ${invoicing.icDph || ""}<br>
-                    ${invoicing.email || ""} · ${invoicing.phone || ""}
+                    ${salesMember?.email || invoicing.email || ""} · ${salesMember?.phone || invoicing.phone || ""}
                 </div>
             </div>
         </div>
@@ -703,11 +703,11 @@ export const GET: APIRoute = async ({ params, url }) => {
     <div class="footer-bar">
         <div class="footer-bar-item" style="width:50%;">
             <div class="footer-bar-label">Telefónne číslo:</div>
-            <div class="footer-bar-value">${invoicing.phone || ""}</div>
+            <div class="footer-bar-value">${salesMember?.phone || invoicing.phone || ""}</div>
         </div>
         <div class="footer-bar-item" style="width:50%; text-align:right;">
             <div class="footer-bar-label">Email:</div>
-            <div class="footer-bar-value">${invoicing.email || ""}</div>
+            <div class="footer-bar-value">${salesMember?.email || invoicing.email || ""}</div>
         </div>
     </div>
 

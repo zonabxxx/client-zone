@@ -777,7 +777,7 @@ export async function getCalculationProducts(calculationId: string | null): Prom
     const productCount = products.length || 1;
     const perProductFallbackPrice = finalTotalPrice / productCount;
     
-    // Convert to QuoteProduct format
+    // Convert to QuoteProduct format (order is set at save time in use-calculation-save.ts)
     const quoteProducts: QuoteProduct[] = products.map((product: any) => {
       const customFields = product.customFieldValues || product.calculatorInputValues || {};
       const dimensions = extractDimensionsFromInputFields(customFields);
@@ -1416,6 +1416,12 @@ export interface PublicQuoteData {
       bankSwift?: string;
     };
   } | null;
+  salesMember: {
+    name: string;
+    email: string | null;
+    phone: string | null;
+    position: string | null;
+  } | null;
 }
 
 export async function getCalculationByShareToken(
@@ -1538,6 +1544,29 @@ export async function getCalculationByShareToken(
     // Use reconstructed calculationData
     let calculationData = calculationDataFromEav;
     
+    // Get sales member (calculation creator/owner) contact info
+    let salesMember: PublicQuoteData['salesMember'] = null;
+    const salesMemberId = data.salesMemberId as string | null;
+    if (salesMemberId) {
+      const memberResult = await db.execute({
+        sql: `SELECT m.phone, m.position, u.name, u.email
+              FROM member m
+              JOIN user u ON u.id = m.user_id
+              WHERE m.id = ?
+              LIMIT 1`,
+        args: [salesMemberId]
+      });
+      if (memberResult.rows.length > 0) {
+        const row = memberResult.rows[0];
+        salesMember = {
+          name: row.name as string,
+          email: row.email as string | null,
+          phone: row.phone as string | null,
+          position: row.position as string | null,
+        };
+      }
+    }
+
     // Get organization data if available
     let organization: PublicQuoteData['organization'] = null;
     if (organizationId) {
@@ -1593,6 +1622,7 @@ export async function getCalculationByShareToken(
         respondedAt: shareRow.responded_at ? new Date((shareRow.responded_at as number) * 1000) : null,
       },
       organization,
+      salesMember,
     };
   } catch (error) {
     console.error('Error getting calculation by share token:', error);
