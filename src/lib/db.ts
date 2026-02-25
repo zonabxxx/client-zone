@@ -2686,6 +2686,7 @@ export interface SupplierRfqItem {
   itemId: string;
   name: string;
   spec: string | null;
+  specs?: Array<{ label: string; value: string }>;
   qty: number;
   unitPrice: number | null;
 }
