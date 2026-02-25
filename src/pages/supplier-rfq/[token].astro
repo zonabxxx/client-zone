@@ -46,6 +46,7 @@ function parseSpecString(spec: string): Array<{ label: string; value: string }> 
 
 // Build specs for each item: prefer specs array, fallback to parsed spec string
 // Also deduplicate name (e.g. "Product — Product" → "Product")
+// Pre-compute spec rows (2 per row) for table display
 const itemsWithSpecs = items.map((item: any) => {
   const specs = Array.isArray(item.specs) && item.specs.length > 0
     ? item.specs
@@ -55,7 +56,12 @@ const itemsWithSpecs = items.map((item: any) => {
     const [left, right] = name.split(' — ');
     if (left.trim() === right.trim()) name = left.trim();
   }
-  return { ...item, name, parsedSpecs: specs };
+  // Group specs into rows of 2
+  const specRows: any[][] = [];
+  for (let i = 0; i < specs.length; i += 2) {
+    specRows.push(specs.slice(i, i + 2));
+  }
+  return { ...item, name, parsedSpecs: specs, specRows };
 });
 
 // Format currency
@@ -143,30 +149,23 @@ function formatCurrency(n: number): string {
                     <h3 class="font-semibold text-white text-lg">{item.name || `Položka ${idx + 1}`}</h3>
                     
                     {/* Structured specs as two-column table */}
-                    {item.parsedSpecs.length > 0 ? (
+                    {item.specRows.length > 0 ? (
                       <table class="mt-3 text-sm w-full" style="border-collapse: collapse;">
                         <tbody>
-                          {(() => {
-                            const specs = item.parsedSpecs as Array<{label: string; value: string}>;
-                            const rows: Array<Array<{label: string; value: string}>> = [];
-                            for (let i = 0; i < specs.length; i += 2) {
-                              rows.push(specs.slice(i, i + 2));
-                            }
-                            return rows;
-                          })().map((row: Array<{label: string; value: string}>) => (
+                          {item.specRows.map((row: any[]) => (
                             <tr>
-                              <td class="text-slate-500 py-1 pr-2 whitespace-nowrap align-top" style="width: 1%; white-space: nowrap;">{row[0].label}:</td>
+                              <td class="text-slate-500 py-1 pr-2 whitespace-nowrap align-top" style="width: 1%;">{row[0].label}:</td>
                               <td class="text-slate-300 font-medium py-1 pr-6 align-top" style="word-break: break-word;">{row[0].value}</td>
                               {row[1] ? (
-                                <>
-                                  <td class="text-slate-500 py-1 pr-2 whitespace-nowrap align-top" style="width: 1%; white-space: nowrap;">{row[1].label}:</td>
+                                <Fragment>
+                                  <td class="text-slate-500 py-1 pr-2 whitespace-nowrap align-top" style="width: 1%;">{row[1].label}:</td>
                                   <td class="text-slate-300 font-medium py-1 align-top" style="word-break: break-word;">{row[1].value}</td>
-                                </>
+                                </Fragment>
                               ) : (
-                                <>
+                                <Fragment>
                                   <td></td>
                                   <td></td>
-                                </>
+                                </Fragment>
                               )}
                             </tr>
                           ))}
