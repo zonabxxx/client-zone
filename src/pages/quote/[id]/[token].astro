@@ -570,14 +570,23 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
                 <h3 class="text-lg font-bold text-white">{isGerman ? 'Angebotsdetails' : 'Rozpis ponuky'}</h3>
                 <p class="text-xs text-slate-500">
                   {(() => {
-                    const visibleServices = services.filter((s: any) => {
+                    // Count top-level services + services nested in products
+                    const topLevelServices = services.filter((s: any) => {
                       const price = Number(s.totalSale) || Number(s.calculatedPrice) || Number(s.salePrice) || Number(s.calculatedCost) || 0;
                       return price > 0;
                     });
+                    const nestedServiceCount = products.reduce((sum: number, p: any) => {
+                      return sum + (p.variant?.services || []).filter((s: any) => (Number(s.salePrice) || Number(s.basePrice) || 0) > 0).length;
+                    }, 0);
+                    const nestedMaterialCount = products.reduce((sum: number, p: any) => {
+                      return sum + (p.variant?.materials || []).filter((m: any) => (Number(m.salePrice) || Number(m.pricePerUnit) || 0) > 0).length;
+                    }, 0);
+                    const totalServiceCount = topLevelServices.length + (topLevelServices.length === 0 ? nestedServiceCount : 0);
+                    const totalMaterialCount = materials.length + (materials.length === 0 ? nestedMaterialCount : 0);
                     return [
                       products.length > 0 && `${products.length} ${products.length === 1 ? t.product : t.productsPlural}`,
-                      visibleServices.length > 0 && `${visibleServices.length} ${visibleServices.length === 1 ? t.service : t.servicesPlural}`,
-                      materials.length > 0 && `${materials.length} ${isGerman ? (materials.length === 1 ? 'Material' : 'Materialien') : (materials.length === 1 ? 'materiál' : 'materiály')}`,
+                      totalServiceCount > 0 && `${totalServiceCount} ${totalServiceCount === 1 ? t.service : t.servicesPlural}`,
+                      totalMaterialCount > 0 && `${totalMaterialCount} ${isGerman ? (totalMaterialCount === 1 ? 'Material' : 'Materialien') : (totalMaterialCount === 1 ? 'materiál' : 'materiály')}`,
                     ].filter(Boolean).join(' · ');
                   })()}
                 </p>
@@ -632,90 +641,169 @@ const requestedChanges = approvalStatus === 'CLIENT_REQUESTED_CHANGES' || respon
               </div>
             )}
             
-            {/* Products */}
+            {/* Products — with inline service & material breakdown */}
             {products.length > 0 && (
-              <div class="p-5 glass rounded-2xl border border-emerald-500/10">
-                <h4 class="font-semibold text-white mb-3 flex items-center gap-2">
-                  <span class="w-6 h-6 bg-emerald-500/20 rounded-md flex items-center justify-center">
-                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                      <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clip-rule="evenodd" />
-                    </svg>
-                  </span>
-                  {t.products}
-                </h4>
-                <div class="space-y-2">
-                  {products.map((p: any, idx: number) => {
-                    // Try multiple sources for specs: templateConfigLabels, variant.templateConfigLabels, variant.description parts
-                    const specs = p.templateConfigLabels 
-                      || p.variant?.templateConfigLabels 
-                      || p.templateConfig 
-                      || p.variant?.templateConfig
-                      || {};
-                    const hasSpecs = Object.keys(specs).length > 0;
-                    
-                    // Build specs string from variant description if no templateConfigLabels
-                    const variantDesc = p.variant?.description || p.variant?.variantDescription || '';
-                    const descParts = variantDesc ? variantDesc.split(' · ').filter((s: string) => s.trim()) : [];
-                    const hasDescParts = !hasSpecs && descParts.length > 0;
-                    
-                    const description = getProductDescription(p);
-                    
-                    const productQty = Number(p.quantity) || 1;
-                    const productTotalDisplay = computeProductTotal(p);
-                    const productUnitPrice = productQty > 0 ? productTotalDisplay / productQty : productTotalDisplay;
-                    
-                    return (
-                      <div class="py-3 px-4 bg-slate-800/50 rounded-lg">
-                        <div class="flex justify-between items-start mb-2">
-                          <span class="text-slate-300 font-medium">
-                            {getProductName(p)}
-                          </span>
+              <div class="space-y-4">
+                {products.map((p: any, idx: number) => {
+                  const productQty = Number(p.quantity) || 1;
+                  const productTotalDisplay = computeProductTotal(p);
+
+                  // Billboard metadata
+                  const bbCode = p.billboardCode || '';
+                  const mediaType = p.mediaType || '';
+                  const rentalStart = p.rentalStartDate;
+                  const rentalEnd = p.rentalEndDate;
+
+                  // Get services & materials nested inside this product's variant
+                  const productServices = (p.variant?.services || []).filter((s: any) => {
+                    const price = Number(s.salePrice) || Number(s.basePrice) || 0;
+                    return price > 0;
+                  });
+                  const productMaterials = (p.variant?.materials || []).filter((m: any) => {
+                    const price = Number(m.salePrice) || Number(m.pricePerUnit) || 0;
+                    return price > 0;
+                  });
+                  const hasBreakdown = productServices.length > 0 || productMaterials.length > 0;
+
+                  // Description / specs (fallback for non-billboard products)
+                  const specs = p.templateConfigLabels 
+                    || p.variant?.templateConfigLabels 
+                    || p.templateConfig 
+                    || p.variant?.templateConfig
+                    || {};
+                  const hasSpecs = Object.keys(specs).length > 0;
+                  const variantDesc = p.variant?.description || p.variant?.variantDescription || '';
+                  const descParts = variantDesc ? variantDesc.split(' · ').filter((s: string) => s.trim()) : [];
+                  const hasDescParts = !hasSpecs && descParts.length > 0 && !hasBreakdown;
+                  const description = getProductDescription(p);
+
+                  return (
+                    <div class="glass rounded-2xl border border-emerald-500/10 overflow-hidden">
+                      {/* Product header with billboard badge */}
+                      <div class="px-5 py-4 border-b border-slate-700/30">
+                        <div class="flex justify-between items-start">
+                          <div class="flex-1">
+                            <div class="flex items-center gap-2 flex-wrap mb-1">
+                              {bbCode && (
+                                <span class="inline-block px-3 py-1 bg-emerald-500 text-slate-900 text-xs font-bold rounded-md">
+                                  {bbCode}
+                                </span>
+                              )}
+                              {mediaType && (
+                                <span class="inline-block px-3 py-1 bg-slate-700/60 text-slate-300 text-xs rounded-md">
+                                  {tr(mediaType)}
+                                </span>
+                              )}
+                            </div>
+                            {!bbCode && (
+                              <span class="text-white font-medium">{getProductName(p)}</span>
+                            )}
+                            {(rentalStart || rentalEnd) && (
+                              <p class="text-sm text-slate-400 mt-1">
+                                {rentalStart ? formatDate(rentalStart) : '—'} — {rentalEnd ? formatDate(rentalEnd) : '—'}
+                              </p>
+                            )}
+                          </div>
                           <span class="font-bold text-white text-lg ml-4 whitespace-nowrap">{formatCurrency(productTotalDisplay)}</span>
                         </div>
-                        {productQty > 1 && (
-                          <div class="text-sm text-slate-400 mb-2">
-                            {productQty} {t.pcs} × {formatUnitPrice(productUnitPrice)} = <span class="font-medium text-slate-300">{formatCurrency(productTotalDisplay)}</span>
-                          </div>
-                        )}
-                        
-                        {/* Product Specifications - show all available specs */}
-                        {hasSpecs && (
-                          <div class="mt-2 pt-2 border-t border-slate-700/50">
-                            <div class="flex flex-wrap gap-2 text-xs">
-                              {Object.entries(specs)
-                                .filter(([key, value]) => value && key !== 'id' && key !== 'entityId' && key !== 'undefined')
-                                .map(([key, value]) => (
-                                  <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
-                                    {value}
-                                  </span>
-                                ))
-                              }
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Fallback to variant description parts (e.g. "1510 × 2240 mm · 1 ks · 20 mm") */}
-                        {hasDescParts && (
-                          <div class="mt-2 pt-2 border-t border-slate-700/50">
-                            <div class="flex flex-wrap gap-2 text-xs">
-                              {descParts.map((part: string) => (
-                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">
-                                  {part}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Fallback to description if no specs */}
-                        {!hasSpecs && !hasDescParts && description && (
-                          <p class="mt-2 text-xs text-slate-500">{description}</p>
-                        )}
                       </div>
-                    );
-                  })}
-                </div>
+
+                      {/* Services breakdown table */}
+                      {productServices.length > 0 && (
+                        <div class="px-5 py-3">
+                          <h5 class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">{t.services}</h5>
+                          <table class="w-full text-sm">
+                            <thead>
+                              <tr class="text-xs text-slate-500 uppercase">
+                                <th class="text-left pb-1 font-medium">{isGerman ? 'Leistung' : 'Služba'}</th>
+                                <th class="text-center pb-1 font-medium w-16">{isGerman ? 'Menge' : 'Mn.'}</th>
+                                <th class="text-right pb-1 font-medium w-24">{isGerman ? 'Stückpr.' : 'Jedn.'}</th>
+                                <th class="text-right pb-1 font-medium w-24">{isGerman ? 'Gesamt' : 'Celkom'}</th>
+                              </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-700/30">
+                              {productServices.map((s: any) => {
+                                const sQty = Number(s.quantity) || 1;
+                                const sUnit = s.unit || (isGerman ? 'Stk.' : 'ks');
+                                const sUnitPrice = Number(s.salePrice) || Number(s.basePrice) || 0;
+                                const sTotal = sUnitPrice * sQty * productQty;
+                                return (
+                                  <tr class="text-slate-300">
+                                    <td class="py-1.5 pr-2">{tr(s.serviceName || s.name || '')}</td>
+                                    <td class="py-1.5 text-center text-slate-400">{sQty * productQty} {sUnit}</td>
+                                    <td class="py-1.5 text-right text-slate-400">{formatUnitPrice(sUnitPrice)}</td>
+                                    <td class="py-1.5 text-right font-medium text-white">{formatCurrency(sTotal)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Materials breakdown table */}
+                      {productMaterials.length > 0 && (
+                        <div class="px-5 py-3 border-t border-slate-700/20">
+                          <h5 class="text-xs font-semibold text-orange-400 uppercase tracking-wider mb-2">{isGerman ? 'Materialien' : 'Materiály'}</h5>
+                          <table class="w-full text-sm">
+                            <thead>
+                              <tr class="text-xs text-slate-500 uppercase">
+                                <th class="text-left pb-1 font-medium">{isGerman ? 'Material' : 'Materiál'}</th>
+                                <th class="text-center pb-1 font-medium w-16">{isGerman ? 'Menge' : 'Mn.'}</th>
+                                <th class="text-right pb-1 font-medium w-24">{isGerman ? 'Stückpr.' : 'Jedn.'}</th>
+                                <th class="text-right pb-1 font-medium w-24">{isGerman ? 'Gesamt' : 'Celkom'}</th>
+                              </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-700/30">
+                              {productMaterials.map((m: any) => {
+                                const mQty = Number(m.quantity) || 1;
+                                const mUnit = m.unit || (isGerman ? 'Stk.' : 'ks');
+                                const mUnitPrice = Number(m.salePrice) || Number(m.pricePerUnit) || 0;
+                                const mTotal = mUnitPrice * mQty * productQty;
+                                return (
+                                  <tr class="text-slate-300">
+                                    <td class="py-1.5 pr-2">{tr(m.materialName || m.name || '')}</td>
+                                    <td class="py-1.5 text-center text-slate-400">{mQty * productQty} {mUnit}</td>
+                                    <td class="py-1.5 text-right text-slate-400">{formatUnitPrice(mUnitPrice)}</td>
+                                    <td class="py-1.5 text-right font-medium text-white">{formatCurrency(mTotal)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Specs / description fallback for non-billboard products */}
+                      {!hasBreakdown && hasSpecs && (
+                        <div class="px-5 py-3 border-t border-slate-700/30">
+                          <div class="flex flex-wrap gap-2 text-xs">
+                            {Object.entries(specs)
+                              .filter(([key, value]) => value && key !== 'id' && key !== 'entityId' && key !== 'undefined')
+                              .map(([key, value]) => (
+                                <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">{value}</span>
+                              ))
+                            }
+                          </div>
+                        </div>
+                      )}
+                      {!hasBreakdown && hasDescParts && (
+                        <div class="px-5 py-3 border-t border-slate-700/30">
+                          <div class="flex flex-wrap gap-2 text-xs">
+                            {descParts.map((part: string) => (
+                              <span class="px-2 py-1 bg-slate-700/50 rounded text-slate-400">{part}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {!hasBreakdown && !hasSpecs && !hasDescParts && description && (
+                        <div class="px-5 py-3 border-t border-slate-700/30">
+                          <p class="text-xs text-slate-500">{description}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
             
